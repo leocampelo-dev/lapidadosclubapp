@@ -1,93 +1,130 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatCurrency } from "@/lib/utils";
-import { Users, ClipboardCheck, DollarSign, TrendingUp } from "lucide-react";
+import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // Busca dados resumidos
-  const [patientsRes, checkinsRes, financialRes] = await Promise.all([
-    supabase.from("patients").select("id, status", { count: "exact" }),
-    supabase
-      .from("checkins")
-      .select("id", { count: "exact" })
-      .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
-    supabase
-      .from("financial")
-      .select("amount, type, status")
-      .eq("type", "receita")
-      .eq("status", "pago"),
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const in7Days = new Date(today);
+  in7Days.setDate(today.getDate() + 7);
+
+  const [patientsRes, appointmentsRes, checkinsRes, financialRes, tasksRes, plansRes] = await Promise.all([
+    supabase.from("patients").select("*").eq("user_id", user!.id),
+    supabase.from("appointments").select("*").eq("user_id", user!.id).order("date", { ascending: false }),
+    supabase.from("checkins").select("id, patient_id, created_at, diet_score").order("created_at", { ascending: false }).limit(200),
+    supabase.from("financial").select("amount, type, status").eq("user_id", user!.id),
+    supabase.from("tasks").select("*").eq("user_id", user!.id).order("created_at", { ascending: false }),
+    supabase.from("plans").select("*").eq("user_id", user!.id),
   ]);
 
-  const totalPatients = patientsRes.count ?? 0;
-  const activePatients = patientsRes.data?.filter((p) => p.status === "ativo").length ?? 0;
-  const checkinsThisWeek = checkinsRes.count ?? 0;
-  const totalRevenue = financialRes.data?.reduce((acc, r) => acc + (r.amount ?? 0), 0) ?? 0;
+  const patients = patientsRes.data ?? [];
+  const appointments = appointmentsRes.data ?? [];
+  const checkins = checkinsRes.data ?? [];
+  const financial = financialRes.data ?? [];
+  const tasks = tasksRes.data ?? [];
+  const plans = plansRes.data ?? [];
 
-  const stats = [
-    {
-      label: "Pacientes ativos",
-      value: `${activePatients}/${totalPatients}`,
-      icon: Users,
-      color: "text-blue-500",
-      bg: "bg-blue-50",
-    },
-    {
-      label: "Check-ins esta semana",
-      value: String(checkinsThisWeek),
-      icon: ClipboardCheck,
-      color: "text-brand",
-      bg: "bg-brand-50",
-    },
-    {
-      label: "Receita total",
-      value: formatCurrency(totalRevenue),
-      icon: DollarSign,
-      color: "text-green-600",
-      bg: "bg-green-50",
-    },
-    {
-      label: "Taxa de adesão",
-      value: "—",
-      icon: TrendingUp,
-      color: "text-purple-500",
-      bg: "bg-purple-50",
-    },
-  ];
+  const patientsWithAlerts = patients.map((p) => {
+    // Último atendimento deste paciente
+    const patientAppts = appointments
+      .filter((a) => a.patient_id === p.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const lastAppt = patientAppts[0] ?? null;
+
+    // next_date do último atendimento
+    const nextDate = lastAppt?.next_date ? new Date(lastAppt.next_date) : null;
+    nextDate?.setHours(0, 0, 0, 0);
+
+    // Plano do paciente (busca pelo nome do campo `plan`)
+    const patientPlan = plans.find((pl) => pl.name === p.plan || pl.id === p.plan);
+    const durationDays = patientPlan?.duration_days ?? 30;
+    const sessions = patientPlan?.sessions ?? 1;
+
+    // Término do plano
+    const startDate = new Date(p.start_date);
+    const planEnd = new Date(startDate);
+    planEnd.setDate(startDate.getDate() + durationDays);
+    planEnd.setHours(0, 0, 0, 0);
+
+    const daysUntilPlanEnd = Math.ceil((planEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Dias desde o último atendimento
+    const lastApptDate = lastAppt ? new Date(lastAppt.date) : null;
+    const daysSinceLastAppt = lastApptDate
+      ? Math.floor((today.getTime() - lastApptDate.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    // Lógica de alertas — ordem de prioridade
+    let alert = null;
+    if (daysUntilPlanEnd <= 30 && daysUntilPlanEnd >= 0) {
+      alert = "renovacao";
+    } else if (nextDate && nextDate < today) {
+      alert = "atrasado";
+    } else if (nextDate && nextDate >= today && nextDate <= in7Days) {
+      alert = "proximo";
+    } else if (!lastAppt) {
+      // Nunca teve atendimento — não alerta ainda
+      alert = null;
+    }
+
+    return {
+      ...p,
+      lastAppt,
+      nextDate: nextDate ? nextDate.toISOString().split("T")[0] : null,
+      daysSinceLastAppt,
+      daysUntilPlanEnd,
+      planEnd: planEnd.toISOString().split("T")[0],
+      patientPlan,
+      sessions,
+      totalAppts: patientAppts.length,
+      alert,
+    };
+  });
+
+  const atrasados = patientsWithAlerts.filter((p) => p.alert === "atrasado");
+  const proximos = patientsWithAlerts.filter((p) => p.alert === "proximo");
+  const renovacoes = patientsWithAlerts.filter((p) => p.alert === "renovacao");
+
+  // Check-ins desta semana
+  const weekAgo = new Date(today);
+  weekAgo.setDate(today.getDate() - 7);
+  const checkinsThisWeek = checkins.filter((c) => new Date(c.created_at) >= weekAgo);
+
+  const scores = checkinsThisWeek
+    .map((c) => c.diet_score)
+    .filter((s) => typeof s === "number");
+  const avgScore = scores.length > 0
+    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    : null;
+
+  const patientIdsWithCheckin = new Set(checkinsThisWeek.map((c) => c.patient_id));
+  const pendentesCheckin = patients.filter((p) => !patientIdsWithCheckin.has(p.id)).length;
+
+  const receitaTotal = financial
+    .filter((f) => f.type === "receita" && f.status === "pago")
+    .reduce((acc, f) => acc + Number(f.amount), 0);
+  const pendente = financial
+    .filter((f) => f.status === "pendente")
+    .reduce((acc, f) => acc + Number(f.amount), 0);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-ink">Dashboard</h1>
-        <p className="text-ink-secondary text-sm mt-0.5">
-          {new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}
-        </p>
-      </div>
-
-      {/* Stats cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map((stat, i) => (
-          <div
-            key={stat.label}
-            className={`bg-white border border-surface-muted rounded-md p-4 shadow-card animate-fade-up delay-${i + 1}`}
-          >
-            <div className={`inline-flex p-2 rounded-sm ${stat.bg} mb-3`}>
-              <stat.icon size={16} className={stat.color} />
-            </div>
-            <p className="text-2xl font-semibold text-ink">{stat.value}</p>
-            <p className="text-xs text-ink-secondary mt-0.5">{stat.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Placeholder de check-ins recentes */}
-      <div className="bg-white border border-surface-muted rounded-md p-5 shadow-card">
-        <h2 className="text-sm font-semibold text-ink mb-4">Check-ins recentes</h2>
-        <p className="text-sm text-ink-muted">
-          Os check-ins dos pacientes aparecerão aqui com análise da IA.
-        </p>
-      </div>
-    </div>
+    <DashboardClient
+      userName={user?.email?.split("@")[0] ?? "Nutricionista"}
+      patients={patients}
+      plans={plans}
+      patientsWithAlerts={patientsWithAlerts}
+      atrasados={atrasados}
+      proximos={proximos}
+      renovacoes={renovacoes}
+      checkinsThisWeek={checkinsThisWeek.length}
+      totalPatients={patients.length}
+      pendentesCheckin={pendentesCheckin}
+      avgScore={avgScore}
+      receitaTotal={receitaTotal}
+      pendente={pendente}
+      tasks={tasks}
+    />
   );
 }
