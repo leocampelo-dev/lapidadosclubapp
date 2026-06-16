@@ -265,7 +265,7 @@ export default function ConfiguracoesPage() {
 
       {/* Modal de plano */}
       {planModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setPlanModal(false)}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-md shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-surface-muted">
               <h3 className="text-sm font-semibold text-ink">{editingPlan ? "Editar plano" : "Novo plano"}</h3>
