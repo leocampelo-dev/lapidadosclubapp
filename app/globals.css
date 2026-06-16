@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Marca */
+  --brand: #E85D04;
+  --brand-light: #FF7A2F;
+  --brand-dark: #C44D00;
+
+  /* Superfícies (área do paciente — clara) */
+  --bg: #FAFAFA;
+  --bg-card: #FFFFFF;
+  --bg-subtle: #F4F4F5;
+
+  /* Texto */
+  --text: #111111;
+  --text-secondary: #52525B;
+  --text-muted: #A1A1AA;
+
+  /* Borda */
+  --border: #E4E4E7;
+
+  /* Painel do nutri — escuro */
+  --nutri-bg: #111111;
+  --nutri-sidebar: #18181B;
+  --nutri-border: #27272A;
+  --nutri-text: #FAFAFA;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar sutil */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D4D4D8;
+  border-radius: 2px;
+}
+
+/* Ring de gamificação */
+@layer utilities {
+  .ring-progress {
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: stroke-dashoffset 1s ease-out;
+  }
+}
+
+/* Tab bar mobile */
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: white;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 50;
+  /* Safe area para iPhone */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Animação de entrada de cards */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.3s ease-out both;
+}
+
+/* Delays escalonados para listas */
+.delay-1 { animation-delay: 0.05s; }
+.delay-2 { animation-delay: 0.10s; }
+.delay-3 { animation-delay: 0.15s; }
+.delay-4 { animation-delay: 0.20s; }
