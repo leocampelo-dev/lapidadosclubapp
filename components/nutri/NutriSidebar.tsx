@@ -6,15 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  Utensils,
-  Dumbbell,
-  DollarSign,
-  BookOpen,
-  LogOut,
+  LayoutDashboard, Users, ClipboardList, Utensils,
+  Dumbbell, DollarSign, BookOpen, Settings,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -26,10 +21,23 @@ const navItems = [
   { href: "/membros", label: "Área de Membros", icon: BookOpen },
 ];
 
-export default function NutriSidebar({ userName }: { userName: string }) {
+export default function NutriSidebar({ userName: initialName }: { userName: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const [userName, setUserName] = useState(initialName);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadProfile() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("profile").select("name, avatar_url").eq("user_id", user.id).single();
+      if (data?.name) setUserName(data.name);
+      if (data?.avatar_url) setAvatarUrl(data.avatar_url);
+    }
+    loadProfile();
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -51,16 +59,9 @@ export default function NutriSidebar({ userName }: { userName: string }) {
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-2.5 px-3 py-2 rounded-sm text-sm transition-colors",
-                active
-                  ? "bg-brand text-white font-medium"
-                  : "text-nutri-muted hover:text-nutri-text hover:bg-white/5"
-              )}
-            >
+            <Link key={href} href={href}
+              className={cn("flex items-center gap-2.5 px-3 py-2 rounded-sm text-sm transition-colors",
+                active ? "bg-brand text-white font-medium" : "text-nutri-muted hover:text-nutri-text hover:bg-white/5")}>
               <Icon size={16} />
               {label}
             </Link>
@@ -70,21 +71,22 @@ export default function NutriSidebar({ userName }: { userName: string }) {
 
       {/* Footer */}
       <div className="p-3 border-t border-nutri-border">
-        <div className="flex items-center gap-2.5 px-2 mb-2">
-          <div className="w-7 h-7 rounded-full bg-brand/20 flex items-center justify-center">
-            <span className="text-brand text-xs font-semibold">
-              {userName.charAt(0).toUpperCase()}
-            </span>
-          </div>
+        <Link href="/configuracoes"
+          className={cn("flex items-center gap-2.5 px-3 py-2 rounded-sm text-sm transition-colors mb-1",
+            pathname.startsWith("/configuracoes") ? "bg-brand text-white font-medium" : "text-nutri-muted hover:text-nutri-text hover:bg-white/5")}>
+          <Settings size={15} />
+          Configurações
+        </Link>
+        <div className="flex items-center gap-2.5 px-2 mt-2">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={userName} className="w-7 h-7 rounded-full object-cover" />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-brand/20 flex items-center justify-center shrink-0">
+              <span className="text-brand text-xs font-semibold">{userName.charAt(0).toUpperCase()}</span>
+            </div>
+          )}
           <span className="text-nutri-text text-xs font-medium truncate">{userName}</span>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 w-full px-3 py-2 text-nutri-muted hover:text-nutri-text text-sm rounded-sm hover:bg-white/5 transition-colors"
-        >
-          <LogOut size={15} />
-          Sair
-        </button>
       </div>
     </aside>
   );
