@@ -322,7 +322,7 @@ export default function DashboardClient({
 
       {/* Modal de lista de alertas */}
       {alertModal && activeAlertGroup && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAlertModal(null)}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-md shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-surface-muted">
               <div className="flex items-center gap-2">
@@ -379,7 +379,7 @@ export default function DashboardClient({
 
       {/* Modal de novo paciente / atendimento / financeiro */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setModal(null)}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-md shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-surface-muted shrink-0">
               <h3 className="text-sm font-semibold text-ink">
