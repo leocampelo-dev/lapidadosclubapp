@@ -1,90 +1,64 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatDate, patWeekLabel } from "@/lib/utils";
-import { Search, UserPlus, ChevronRight } from "lucide-react";
-import Link from "next/link";
-
-const statusColors: Record<string, string> = {
-  ativo: "bg-green-100 text-green-700",
-  inativo: "bg-surface-subtle text-ink-muted",
-  pausado: "bg-amber-100 text-amber-700",
-};
+import PacientesClient from "./PacientesClient";
 
 export default async function PacientesPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: patients } = await supabase
-    .from("patients")
-    .select("id, name, email, phone, status, started_at, goal")
-    .order("name");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const in7Days = new Date(today);
+  in7Days.setDate(today.getDate() + 7);
 
-  return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-ink">Pacientes</h1>
-          <p className="text-ink-secondary text-sm mt-0.5">
-            {patients?.length ?? 0} no total
-          </p>
-        </div>
-        <button className="flex items-center gap-2 h-9 px-4 bg-brand hover:bg-brand-dark text-white text-sm font-medium rounded-sm transition-colors shadow-brand">
-          <UserPlus size={15} />
-          Novo paciente
-        </button>
-      </div>
+  const [patientsRes, appointmentsRes, plansRes] = await Promise.all([
+    supabase.from("patients").select("*").eq("user_id", user!.id).order("name"),
+    supabase.from("appointments").select("*").eq("user_id", user!.id).order("date", { ascending: false }),
+    supabase.from("plans").select("*").eq("user_id", user!.id).order("duration_days"),
+  ]);
 
-      {/* Search (decorativo por ora) */}
-      <div className="relative mb-4">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-        <input
-          type="text"
-          placeholder="Buscar paciente..."
-          className="w-full h-9 pl-9 pr-3 rounded-sm border border-surface-muted bg-white text-ink text-sm
-                     focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
-        />
-      </div>
+  const patients = patientsRes.data ?? [];
+  const appointments = appointmentsRes.data ?? [];
+  const plans = plansRes.data ?? [];
 
-      {/* Lista */}
-      <div className="flex flex-col gap-2">
-        {patients?.map((p, i) => (
-          <Link
-            key={p.id}
-            href={`/pacientes/${p.id}`}
-            className={`bg-white border border-surface-muted rounded-md px-4 py-3.5 shadow-card
-                       hover:shadow-card-hover transition-shadow flex items-center gap-3 animate-fade-up delay-${Math.min(i + 1, 4)}`}
-          >
-            {/* Avatar */}
-            <div className="w-9 h-9 rounded-full bg-brand/10 flex items-center justify-center shrink-0">
-              <span className="text-brand text-sm font-semibold">
-                {p.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
+  const patientsWithStatus = patients.map((p) => {
+    const patientAppts = appointments
+      .filter((a) => a.patient_id === p.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const lastAppt = patientAppts[0] ?? null;
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-ink truncate">{p.name}</p>
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${statusColors[p.status] ?? statusColors.inativo}`}>
-                  {p.status}
-                </span>
-              </div>
-              <p className="text-xs text-ink-muted mt-0.5">
-                {p.started_at ? patWeekLabel(p.started_at) : "—"}
-                {p.goal ? ` · ${p.goal}` : ""}
-              </p>
-            </div>
+    const nextDate = lastAppt?.next_date ? new Date(lastAppt.next_date) : null;
+    nextDate?.setHours(0, 0, 0, 0);
 
-            <ChevronRight size={16} className="text-ink-muted shrink-0" />
-          </Link>
-        ))}
+    const patientPlan = plans.find((pl) => pl.name === p.plan);
+    const durationDays = patientPlan?.duration_days ?? 30;
+    const sessions = patientPlan?.sessions ?? 1;
 
-        {(!patients || patients.length === 0) && (
-          <div className="bg-white border border-surface-muted rounded-md p-8 text-center">
-            <p className="text-ink-secondary text-sm">Nenhum paciente cadastrado ainda.</p>
-            <p className="text-ink-muted text-xs mt-1">Clique em "Novo paciente" para começar.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    const startDate = new Date(p.start_date);
+    const planEnd = new Date(startDate);
+    planEnd.setDate(startDate.getDate() + durationDays);
+    planEnd.setHours(0, 0, 0, 0);
+    const daysUntilPlanEnd = Math.ceil((planEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    const lastApptDate = lastAppt ? new Date(lastAppt.date) : null;
+    const daysSinceLastAppt = lastApptDate
+      ? Math.floor((today.getTime() - lastApptDate.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    let status: "em_dia" | "atrasado" | "renovacao" = "em_dia";
+    if (daysUntilPlanEnd <= 30 && daysUntilPlanEnd >= 0) status = "renovacao";
+    else if (nextDate && nextDate < today) status = "atrasado";
+
+    return {
+      ...p,
+      lastAppt,
+      nextDate: nextDate ? nextDate.toISOString().split("T")[0] : null,
+      daysSinceLastAppt,
+      daysUntilPlanEnd,
+      sessions,
+      totalAppts: patientAppts.length,
+      status,
+    };
+  });
+
+  return <PacientesClient patients={patientsWithStatus} plans={plans} />;
 }

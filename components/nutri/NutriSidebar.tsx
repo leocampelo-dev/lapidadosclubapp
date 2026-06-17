@@ -32,9 +32,9 @@ export default function NutriSidebar({ userName: initialName }: { userName: stri
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from("profile").select("name, avatar_url").eq("user_id", user.id).single();
-      if (data?.name) setUserName(data.name);
-      if (data?.avatar_url) setAvatarUrl(data.avatar_url);
+      const { data } = await supabase.from("profile").select("full_name, avatar_data").eq("user_id", user.id).maybeSingle();
+      if (data?.full_name) setUserName(data.full_name);
+      if (data?.avatar_data) setAvatarUrl(data.avatar_data);
     }
     loadProfile();
   }, []);

@@ -19,7 +19,13 @@ interface Patient {
   patientPlan?: { name: string; duration_days: number; sessions: number } | null;
 }
 interface Plan { id: string; name: string; duration_days: number; sessions: number; price?: number; }
-interface Task { id: string; text?: string; content?: string; completed: boolean; created_at: string; completed_at?: string | null; }
+interface Task {
+  id: string;
+  text: string;       // coluna real no banco
+  done: boolean;      // coluna real no banco
+  done_at?: string | null;
+  created_at: string;
+}
 interface Props {
   userName: string; patients: Patient[]; plans: Plan[]; patientsWithAlerts: Patient[];
   atrasados: Patient[]; proximos: Patient[]; renovacoes: Patient[];
@@ -49,10 +55,11 @@ export default function DashboardClient({
   const greeting = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
   const dateLabel = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
 
+  // Tasks: separa pendentes e feitas (feitas somem após 7 dias)
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const pendingTasks = tasks.filter((t) => !t.completed);
-  const doneTasks = tasks.filter((t) => t.completed && (!t.completed_at || new Date(t.completed_at) > sevenDaysAgo));
+  const pendingTasks = tasks.filter((t) => !t.done);
+  const doneTasks = tasks.filter((t) => t.done && (!t.done_at || new Date(t.done_at) > sevenDaysAgo));
 
   function handlePlanSelect(planName: string) {
     const selected = plans.find((pl) => pl.name === planName);
@@ -79,20 +86,24 @@ export default function DashboardClient({
   async function addTask() {
     if (!newTask.trim()) return;
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const newId = `TASK-${Date.now()}`;
     const { data, error } = await supabase.from("tasks").insert({
-      content: newTask.trim(),
+      id: newId,
+      user_id: user.id,
       text: newTask.trim(),
-      completed: false,
-      user_id: user?.id,
+      done: false,
     }).select().single();
     if (data && !error) setTasks((prev) => [data, ...prev]);
+    else console.error("Erro ao criar task:", error);
     setNewTask("");
   }
 
   async function toggleTask(task: Task) {
-    const completed_at = !task.completed ? new Date().toISOString() : null;
-    await supabase.from("tasks").update({ completed: !task.completed, completed_at }).eq("id", task.id);
-    setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, completed: !t.completed, completed_at } : t));
+    const done_at = !task.done ? new Date().toISOString() : null;
+    const { error } = await supabase.from("tasks").update({ done: !task.done, done_at }).eq("id", task.id);
+    if (!error) setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, done: !t.done, done_at } : t));
+    else console.error("Erro ao toggle task:", error);
   }
 
   async function deleteTask(id: string) {
@@ -104,17 +115,20 @@ export default function DashboardClient({
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Não autenticado");
+
       if (modal === "paciente") {
         const patientId = `PAC-${String(Date.now()).slice(-6)}`;
-        await supabase.from("patients").insert({
-          id: patientId, user_id: user?.id, name: form.name,
+        const { error: pErr } = await supabase.from("patients").insert({
+          id: patientId, user_id: user.id, name: form.name,
           phone: form.phone ?? "", plan: form.plan ?? "",
           start_date: form.start_date ?? new Date().toISOString().split("T")[0],
           notes: form.notes ?? "",
         });
+        if (pErr) throw pErr;
         if (expandOptional.atendimento && form.apt_date) {
           await supabase.from("appointments").insert({
-            id: `APT-${Date.now()}`, user_id: user?.id, patient_id: patientId,
+            id: `APT-${Date.now()}`, user_id: user.id, patient_id: patientId,
             date: form.apt_date, weight: form.apt_weight ? Number(form.apt_weight) : null,
             evaluation: form.apt_evaluation ?? "", conduct: form.apt_conduct ?? "",
             next_date: form.apt_next_date ?? null,
@@ -122,7 +136,7 @@ export default function DashboardClient({
         }
         if (expandOptional.financeiro && form.fin_amount) {
           await supabase.from("financial").insert({
-            user_id: user?.id, patient_id: patientId,
+            user_id: user.id, patient_id: patientId,
             description: `Plano ${form.plan ?? ""}`,
             amount: Number(form.fin_amount), type: "receita",
             status: Number(form.fin_paid ?? 0) >= Number(form.fin_amount) ? "pago" : "pendente",
@@ -130,24 +144,28 @@ export default function DashboardClient({
           });
         }
       } else if (modal === "atendimento") {
-        await supabase.from("appointments").insert({
-          id: `APT-${Date.now()}`, user_id: user?.id,
+        const { error } = await supabase.from("appointments").insert({
+          id: `APT-${Date.now()}`, user_id: user.id,
           patient_id: form.patient_id, date: form.date ?? new Date().toISOString().split("T")[0],
           next_date: form.next_date ?? null, weight: form.weight ? Number(form.weight) : null,
           evaluation: form.evaluation ?? "", conduct: form.conduct ?? "", notes: form.notes ?? "",
         });
+        if (error) throw error;
       } else if (modal === "financeiro") {
-        await supabase.from("financial").insert({
-          user_id: user?.id, patient_id: form.patient_id,
+        const { error } = await supabase.from("financial").insert({
+          user_id: user.id, patient_id: form.patient_id,
           description: form.description, amount: Number(form.amount),
           type: form.type ?? "receita", status: form.status ?? "pendente",
           due_date: form.due_date ?? null,
         });
+        if (error) throw error;
       }
       setModal(null); setForm({}); setExpandOptional({});
       window.location.reload();
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error("Erro ao salvar:", e);
+      alert("Erro ao salvar. Veja o console para detalhes.");
+    } finally { setLoading(false); }
   }
 
   const alertGroups = {
@@ -156,7 +174,6 @@ export default function DashboardClient({
     renovacao:{ label: "Renovações", sub: "planos próximos do fim", count: renovacoes.length, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", icon: RefreshCw, patients: renovacoes },
     total:    { label: "Total de pacientes", sub: "ativos no sistema", count: totalPatients, color: "text-ink-secondary", bg: "bg-surface-subtle", border: "border-surface-muted", icon: Users, patients: patientsWithAlerts },
   };
-
   const activeAlertGroup = alertModal ? alertGroups[alertModal as keyof typeof alertGroups] : null;
 
   return (
@@ -183,7 +200,7 @@ export default function DashboardClient({
         </div>
       </div>
 
-      {/* Cards de alerta — clicáveis */}
+      {/* Cards de alerta */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {Object.entries(alertGroups).map(([key, card]) => {
           const hasAlert = card.count > 0 && key !== "total";
@@ -197,9 +214,7 @@ export default function DashboardClient({
               <p className={cn("text-3xl font-bold", hasAlert ? card.color : "text-ink")}>{card.count}</p>
               <p className="text-sm font-medium text-ink mt-0.5">{card.label}</p>
               <p className="text-xs text-ink-muted">{card.sub}</p>
-              {card.count > 0 && (
-                <p className="text-xs text-brand mt-2 font-medium">Ver lista →</p>
-              )}
+              {card.count > 0 && <p className="text-xs text-brand mt-2 font-medium">Ver lista →</p>}
             </button>
           );
         })}
@@ -213,20 +228,16 @@ export default function DashboardClient({
             <Link href="/checkins" className="text-xs text-brand hover:underline">Ver tudo →</Link>
           </div>
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="text-center p-3 bg-surface-subtle rounded-md">
-              <p className="text-2xl font-bold text-red-500">{pendentesCheckin}</p>
-              <p className="text-xs text-ink-muted mt-0.5">Pendentes</p>
-            </div>
-            <div className="text-center p-3 bg-surface-subtle rounded-md">
-              <p className="text-2xl font-bold text-green-600">{checkinsThisWeek}</p>
-              <p className="text-xs text-ink-muted mt-0.5">Responderam</p>
-            </div>
-            <div className="text-center p-3 bg-surface-subtle rounded-md">
-              <p className={cn("text-2xl font-bold", avgScore !== null ? (avgScore >= 7 ? "text-brand" : "text-amber-500") : "text-ink-muted")}>
-                {avgScore ?? "—"}
-              </p>
-              <p className="text-xs text-ink-muted mt-0.5">Score médio</p>
-            </div>
+            {[
+              { label: "Pendentes", value: pendentesCheckin, color: "text-red-500" },
+              { label: "Responderam", value: checkinsThisWeek, color: "text-green-600" },
+              { label: "Score médio", value: avgScore ?? "—", color: avgScore !== null ? (avgScore >= 7 ? "text-brand" : "text-amber-500") : "text-ink-muted" },
+            ].map((s) => (
+              <div key={s.label} className="text-center p-3 bg-surface-subtle rounded-md">
+                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="text-xs text-ink-muted mt-0.5">{s.label}</p>
+              </div>
+            ))}
           </div>
           {totalPatients > 0 && (
             <div>
@@ -242,7 +253,6 @@ export default function DashboardClient({
           )}
         </div>
 
-        {/* Financeiro com olho */}
         <div className="bg-white border border-surface-muted rounded-md p-5 shadow-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-ink flex items-center gap-2"><DollarSign size={16} className="text-green-600" /> Financeiro</h2>
@@ -266,7 +276,7 @@ export default function DashboardClient({
         </div>
       </div>
 
-      {/* Notas com olho */}
+      {/* Notas */}
       <div className="bg-white border border-surface-muted rounded-md p-5 shadow-card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-ink flex items-center gap-2"><CheckSquare size={16} className="text-brand" /> Notas</h2>
@@ -274,22 +284,19 @@ export default function DashboardClient({
             <button onClick={() => setHideNotas(!hideNotas)} className="text-ink-muted hover:text-ink transition-colors">
               {hideNotas ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
-            <button onClick={() => setShowDoneTasks(!showDoneTasks)}
-              className="text-xs text-ink-muted hover:text-ink transition-colors">
+            <button onClick={() => setShowDoneTasks(!showDoneTasks)} className="text-xs text-ink-muted hover:text-ink transition-colors">
               {showDoneTasks ? "Ocultar feitas" : "Ver feitas"} ({doneTasks.length})
             </button>
           </div>
         </div>
-
-        {!hideNotas && (
+        {!hideNotas ? (
           <>
             <div className="flex gap-2 mb-4">
               <input type="text" value={newTask} onChange={(e) => setNewTask(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addTask()}
                 placeholder="Nova nota... (Enter para adicionar)"
                 className="flex-1 h-9 px-3 rounded-sm border border-surface-muted bg-surface text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand" />
-              <button onClick={addTask}
-                className="h-9 w-9 flex items-center justify-center bg-brand hover:bg-brand-dark text-white rounded-sm shadow-brand">
+              <button onClick={addTask} className="h-9 w-9 flex items-center justify-center bg-brand hover:bg-brand-dark text-white rounded-sm shadow-brand">
                 <Plus size={16} />
               </button>
             </div>
@@ -298,7 +305,7 @@ export default function DashboardClient({
               {pendingTasks.map((task) => (
                 <div key={task.id} className="flex items-center gap-2.5 group px-1 py-1 rounded-sm hover:bg-surface-subtle transition-colors">
                   <button onClick={() => toggleTask(task)} className="shrink-0 text-ink-muted hover:text-brand transition-colors"><Square size={16} /></button>
-                  <span className="flex-1 text-sm text-ink">{task.content ?? task.text}</span>
+                  <span className="flex-1 text-sm text-ink">{task.text}</span>
                   <button onClick={() => deleteTask(task.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-ink-muted hover:text-red-500 transition-all"><Trash2 size={14} /></button>
                 </div>
               ))}
@@ -306,9 +313,9 @@ export default function DashboardClient({
                 <div className="mt-3 pt-3 border-t border-surface-muted flex flex-col gap-1.5">
                   <p className="text-xs text-ink-muted font-medium mb-1">Feitas · somem após 7 dias</p>
                   {doneTasks.map((task) => (
-                    <div key={task.id} className="flex items-center gap-2.5 group px-1 py-1 rounded-sm opacity-50 hover:opacity-80 transition-opacity">
+                    <div key={task.id} className="flex items-center gap-2.5 group px-1 py-1 rounded-sm opacity-50 hover:opacity-80">
                       <button onClick={() => toggleTask(task)} className="shrink-0 text-brand"><CheckSquare size={16} /></button>
-                      <span className="flex-1 text-sm text-ink line-through">{task.content ?? task.text}</span>
+                      <span className="flex-1 text-sm text-ink line-through">{task.text}</span>
                       <button onClick={() => deleteTask(task.id)} className="shrink-0 opacity-0 group-hover:opacity-100 text-ink-muted hover:text-red-500 transition-all"><Trash2 size={14} /></button>
                     </div>
                   ))}
@@ -316,14 +323,13 @@ export default function DashboardClient({
               )}
             </div>
           </>
-        )}
-        {hideNotas && <p className="text-sm text-ink-muted text-center py-4">Notas ocultas</p>}
+        ) : <p className="text-sm text-ink-muted text-center py-4">Notas ocultas</p>}
       </div>
 
-      {/* Modal de lista de alertas */}
+      {/* Modal lista de alertas */}
       {alertModal && activeAlertGroup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-md shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-md shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between px-5 py-4 border-b border-surface-muted">
               <div className="flex items-center gap-2">
                 <activeAlertGroup.icon size={16} className={activeAlertGroup.color} />
@@ -331,13 +337,9 @@ export default function DashboardClient({
               </div>
               <button onClick={() => setAlertModal(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
             </div>
-            <p className="text-xs text-ink-muted px-5 pt-3">
-              {activeAlertGroup.count} paciente{activeAlertGroup.count !== 1 ? "s" : ""} · {activeAlertGroup.sub}
-            </p>
+            <p className="text-xs text-ink-muted px-5 pt-3">{activeAlertGroup.count} paciente{activeAlertGroup.count !== 1 ? "s" : ""} · {activeAlertGroup.sub}</p>
             <div className="p-3 flex flex-col gap-2 max-h-96 overflow-y-auto">
-              {activeAlertGroup.patients.length === 0 && (
-                <p className="text-sm text-ink-muted text-center py-4">Nenhum paciente nesta categoria.</p>
-              )}
+              {activeAlertGroup.patients.length === 0 && <p className="text-sm text-ink-muted text-center py-4">Nenhum paciente nesta categoria.</p>}
               {activeAlertGroup.patients.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 p-3 bg-surface-subtle rounded-md">
                   <div className="w-9 h-9 rounded-full bg-brand/10 flex items-center justify-center shrink-0">
@@ -346,7 +348,7 @@ export default function DashboardClient({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-ink truncate">{p.name}</p>
                     <p className="text-xs text-ink-muted">
-                      {alertModal === "atrasado" && p.daysSinceLastAppt && `${p.daysSinceLastAppt}d sem consulta · Plano ${p.plan ?? "—"}`}
+                      {alertModal === "atrasado" && `${p.daysSinceLastAppt ?? "?"}d sem consulta · Plano ${p.plan ?? "—"}`}
                       {alertModal === "proximo" && p.nextDate && `Última: ${p.lastAppt ? formatDate(p.lastAppt.date) : "—"} · Próxima: ${formatDate(p.nextDate)}`}
                       {alertModal === "renovacao" && `Termina em ${p.daysUntilPlanEnd}d · ${p.plan ?? "—"}`}
                       {alertModal === "total" && `Plano ${p.plan ?? "—"} · início ${formatDate(p.start_date)}`}
@@ -355,12 +357,12 @@ export default function DashboardClient({
                   <div className="flex gap-1.5 shrink-0">
                     {p.phone && (
                       <a href={`https://wa.me/55${p.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"
-                        className="h-7 px-2 text-xs border border-surface-muted rounded-sm text-ink hover:bg-surface-subtle transition-colors flex items-center gap-1">
-                        <Phone size={11} /> WhatsApp
+                        className="h-7 px-2 text-xs border border-surface-muted rounded-sm text-ink hover:bg-surface-subtle flex items-center gap-1">
+                        <Phone size={11} /> WA
                       </a>
                     )}
                     <Link href={`/pacientes/${p.id}`} onClick={() => setAlertModal(null)}
-                      className="h-7 px-2 text-xs bg-brand text-white rounded-sm hover:bg-brand-dark transition-colors flex items-center">
+                      className="h-7 px-2 text-xs bg-brand text-white rounded-sm hover:bg-brand-dark flex items-center">
                       Ver
                     </Link>
                   </div>
@@ -368,8 +370,7 @@ export default function DashboardClient({
               ))}
             </div>
             <div className="px-5 pb-4 pt-2 border-t border-surface-muted">
-              <Link href="/pacientes" onClick={() => setAlertModal(null)}
-                className="text-xs text-brand hover:underline flex items-center gap-1">
+              <Link href="/pacientes" onClick={() => setAlertModal(null)} className="text-xs text-brand hover:underline flex items-center gap-1">
                 Ver todos os pacientes <ChevronRight size={12} />
               </Link>
             </div>
@@ -377,19 +378,18 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* Modal de novo paciente / atendimento / financeiro */}
+      {/* Modal paciente/atendimento/financeiro */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-md shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-md shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-surface-muted shrink-0">
               <h3 className="text-sm font-semibold text-ink">
                 {modal === "paciente" ? "Novo paciente" : modal === "atendimento" ? "Novo atendimento" : "Novo lançamento"}
               </h3>
               <button onClick={() => setModal(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
             </div>
-
             <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3">
-              {/* NOVO PACIENTE */}
+
               {modal === "paciente" && <>
                 <Field label="Nome completo *" value={form.name ?? ""} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Ex: Ana Carolina Souza" />
                 <Field label="WhatsApp" value={form.phone ?? ""} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} placeholder="(82) 99999-9999" />
@@ -416,14 +416,11 @@ export default function DashboardClient({
                   </div>
                 </div>
                 <Field label="Observações" value={form.notes ?? ""} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="Objetivos, alergias..." textarea />
-
-                {/* Expansíveis */}
                 <div className="border border-surface-muted rounded-md overflow-hidden">
                   <button type="button" onClick={() => setExpandOptional((e) => ({ ...e, atendimento: !e.atendimento }))}
                     className={cn("w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors",
                       expandOptional.atendimento ? "bg-brand text-white" : "bg-surface-subtle text-ink hover:bg-surface-muted")}>
-                    <span>✓ 1º Atendimento</span>
-                    <span className="text-xs opacity-70">{expandOptional.atendimento ? "▲" : "▼"}</span>
+                    <span>✓ 1º Atendimento</span><span className="text-xs opacity-70">{expandOptional.atendimento ? "▲" : "▼"}</span>
                   </button>
                   {expandOptional.atendimento && (
                     <div className="p-4 flex flex-col gap-3">
@@ -437,13 +434,11 @@ export default function DashboardClient({
                     </div>
                   )}
                 </div>
-
                 <div className="border border-surface-muted rounded-md overflow-hidden">
                   <button type="button" onClick={() => setExpandOptional((e) => ({ ...e, financeiro: !e.financeiro }))}
                     className={cn("w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors",
                       expandOptional.financeiro ? "bg-brand text-white" : "bg-surface-subtle text-ink hover:bg-surface-muted")}>
-                    <span>💰 Financeiro</span>
-                    <span className="text-xs opacity-70">{expandOptional.financeiro ? "▲" : "▼"}</span>
+                    <span>💰 Financeiro</span><span className="text-xs opacity-70">{expandOptional.financeiro ? "▲" : "▼"}</span>
                   </button>
                   {expandOptional.financeiro && (
                     <div className="p-4 flex flex-col gap-3">
@@ -463,7 +458,6 @@ export default function DashboardClient({
                 </div>
               </>}
 
-              {/* NOVO ATENDIMENTO */}
               {modal === "atendimento" && <>
                 <div>
                   <label className="block text-xs font-medium text-ink-secondary mb-1">Paciente *</label>
@@ -485,7 +479,6 @@ export default function DashboardClient({
                 </div>
               </>}
 
-              {/* LANÇAMENTO */}
               {modal === "financeiro" && <>
                 <div>
                   <label className="block text-xs font-medium text-ink-secondary mb-1">Paciente *</label>
@@ -516,7 +509,6 @@ export default function DashboardClient({
                 <Field label="Vencimento" value={form.due_date ?? ""} onChange={(v) => setForm((f) => ({ ...f, due_date: v }))} type="date" />
               </>}
             </div>
-
             <div className="flex gap-2 px-5 pb-5 pt-3 border-t border-surface-muted shrink-0">
               <button onClick={() => setModal(null)} className="flex-1 h-9 border border-surface-muted rounded-sm text-sm text-ink hover:bg-surface-subtle transition-colors">Cancelar</button>
               <button onClick={handleModalSubmit} disabled={loading}
