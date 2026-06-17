@@ -44,9 +44,9 @@ export default async function PacientesPage() {
       ? Math.floor((today.getTime() - lastApptDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
-    let status: "em_dia" | "atrasado" | "renovacao" = "em_dia";
-    if (daysUntilPlanEnd <= 30 && daysUntilPlanEnd >= 0) status = "renovacao";
-    else if (nextDate && nextDate < today) status = "atrasado";
+    let alertStatus: "em_dia" | "atrasado" | "renovacao" = "em_dia";
+    if (daysUntilPlanEnd <= 30 && daysUntilPlanEnd >= 0) alertStatus = "renovacao";
+    else if (nextDate && nextDate < today) alertStatus = "atrasado";
 
     return {
       ...p,
@@ -56,7 +56,8 @@ export default async function PacientesPage() {
       daysUntilPlanEnd,
       sessions,
       totalAppts: patientAppts.length,
-      status,
+      alertStatus,
+      isInactive: p.status === "inativo",
     };
   });
 

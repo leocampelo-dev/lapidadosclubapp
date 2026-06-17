@@ -127,11 +127,18 @@ export default function DashboardClient({
         });
         if (pErr) throw pErr;
         if (expandOptional.atendimento && form.apt_date) {
+          // Se não preencher a próxima consulta, calcula automaticamente +30 dias
+          let calculatedNextDate = form.apt_next_date || null;
+          if (!calculatedNextDate) {
+            const next = new Date(form.apt_date);
+            next.setDate(next.getDate() + 30);
+            calculatedNextDate = next.toISOString().split("T")[0];
+          }
           await supabase.from("appointments").insert({
             id: `APT-${Date.now()}`, user_id: user.id, patient_id: patientId,
             date: form.apt_date, weight: form.apt_weight ? Number(form.apt_weight) : null,
             evaluation: form.apt_evaluation ?? "", conduct: form.apt_conduct ?? "",
-            next_date: form.apt_next_date ?? null,
+            next_date: calculatedNextDate,
           });
         }
         if (expandOptional.financeiro && form.fin_amount) {
@@ -144,10 +151,17 @@ export default function DashboardClient({
           });
         }
       } else if (modal === "atendimento") {
+        const apptDate = form.date ?? new Date().toISOString().split("T")[0];
+        let calculatedNextDate = form.next_date || null;
+        if (!calculatedNextDate) {
+          const next = new Date(apptDate);
+          next.setDate(next.getDate() + 30);
+          calculatedNextDate = next.toISOString().split("T")[0];
+        }
         const { error } = await supabase.from("appointments").insert({
           id: `APT-${Date.now()}`, user_id: user.id,
-          patient_id: form.patient_id, date: form.date ?? new Date().toISOString().split("T")[0],
-          next_date: form.next_date ?? null, weight: form.weight ? Number(form.weight) : null,
+          patient_id: form.patient_id, date: apptDate,
+          next_date: calculatedNextDate, weight: form.weight ? Number(form.weight) : null,
           evaluation: form.evaluation ?? "", conduct: form.conduct ?? "", notes: form.notes ?? "",
         });
         if (error) throw error;
@@ -380,8 +394,8 @@ export default function DashboardClient({
 
       {/* Modal paciente/atendimento/financeiro */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-md shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 py-8">
+          <div className="bg-white rounded-md shadow-xl w-full max-w-lg flex flex-col" style={{ maxHeight: "calc(100vh - 4rem)" }}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-surface-muted shrink-0">
               <h3 className="text-sm font-semibold text-ink">
                 {modal === "paciente" ? "Novo paciente" : modal === "atendimento" ? "Novo atendimento" : "Novo lançamento"}
@@ -423,7 +437,7 @@ export default function DashboardClient({
                     <span>✓ 1º Atendimento</span><span className="text-xs opacity-70">{expandOptional.atendimento ? "▲" : "▼"}</span>
                   </button>
                   {expandOptional.atendimento && (
-                    <div className="p-4 flex flex-col gap-3">
+                    <div className="p-4 flex flex-col gap-3 max-h-72 overflow-y-auto">
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Data" value={form.apt_date ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_date: v }))} type="date" />
                         <Field label="Peso (kg)" value={form.apt_weight ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_weight: v }))} placeholder="75.5" type="number" />
@@ -431,6 +445,7 @@ export default function DashboardClient({
                       <Field label="Avaliação clínica" value={form.apt_evaluation ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_evaluation: v }))} placeholder="Observações clínicas..." textarea />
                       <Field label="Conduta" value={form.apt_conduct ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_conduct: v }))} placeholder="Plano alimentar..." textarea />
                       <Field label="Próxima consulta" value={form.apt_next_date ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_next_date: v }))} type="date" />
+                      <p className="text-[11px] text-ink-muted -mt-1">Se deixar em branco, calculamos automaticamente com base no intervalo do plano.</p>
                     </div>
                   )}
                 </div>
@@ -441,7 +456,7 @@ export default function DashboardClient({
                     <span>💰 Financeiro</span><span className="text-xs opacity-70">{expandOptional.financeiro ? "▲" : "▼"}</span>
                   </button>
                   {expandOptional.financeiro && (
-                    <div className="p-4 flex flex-col gap-3">
+                    <div className="p-4 flex flex-col gap-3 max-h-72 overflow-y-auto">
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="Valor total (R$)" value={form.fin_amount ?? ""} onChange={(v) => setForm((f) => ({ ...f, fin_amount: v }))} placeholder="0.00" type="number" />
                         <Field label="Valor pago (R$)" value={form.fin_paid ?? ""} onChange={(v) => setForm((f) => ({ ...f, fin_paid: v }))} placeholder="0.00" type="number" />
@@ -477,6 +492,7 @@ export default function DashboardClient({
                   <Field label="Próxima consulta" value={form.next_date ?? ""} onChange={(v) => setForm((f) => ({ ...f, next_date: v }))} type="date" />
                   <Field label="Notas extras" value={form.notes ?? ""} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="Observação rápida..." />
                 </div>
+                <p className="text-[11px] text-ink-muted -mt-2">Se deixar a próxima consulta em branco, calculamos automaticamente +30 dias.</p>
               </>}
 
               {modal === "financeiro" && <>

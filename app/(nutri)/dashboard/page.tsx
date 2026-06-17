@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     supabase.from("profile").select("full_name").eq("user_id", user!.id).maybeSingle(),
   ]);
 
-  const patients = patientsRes.data ?? [];
+  const patients = (patientsRes.data ?? []).filter((p) => p.status !== "inativo");
   const appointments = appointmentsRes.data ?? [];
   const checkins = checkinsRes.data ?? [];
   const financial = financialRes.data ?? [];
