@@ -44,8 +44,8 @@ export default async function PacientePage({ params }: { params: Promise<{ id: s
   if (daysUntilPlanEnd <= 30 && daysUntilPlanEnd >= 0) status = "renovacao";
   else if (nextDate && nextDate < today) status = "atrasado";
 
-  const totalPago = financial.filter((f) => f.status === "pago").reduce((acc, f) => acc + Number(f.amount), 0);
-  const totalPendente = financial.filter((f) => f.status === "pendente").reduce((acc, f) => acc + Number(f.amount), 0);
+  const totalPago = financial.reduce((acc, f) => acc + Number(f.paid_value || 0), 0);
+  const totalPendente = financial.reduce((acc, f) => acc + (Number(f.total_value || 0) - Number(f.paid_value || 0)), 0);
 
   return (
     <PacienteDetailClient

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import NovoPacienteWizard from "@/components/nutri/NovoPacienteWizard";
 
 interface Patient {
   id: string; name: string; phone?: string; plan?: string; start_date: string;
@@ -32,7 +33,7 @@ interface Props {
   checkinsThisWeek: number; totalPatients: number; pendentesCheckin: number;
   avgScore: number | null; receitaTotal: number; pendente: number; tasks: Task[];
 }
-type ModalType = "paciente" | "atendimento" | "financeiro" | null;
+type ModalType = "atendimento" | "financeiro" | null;
 
 export default function DashboardClient({
   userName, patients, plans, patientsWithAlerts,
@@ -41,6 +42,7 @@ export default function DashboardClient({
 }: Props) {
   const supabase = createClient();
   const [modal, setModal] = useState<ModalType>(null);
+  const [showWizard, setShowWizard] = useState(false);
   const [alertModal, setAlertModal] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [newTask, setNewTask] = useState("");
@@ -49,7 +51,6 @@ export default function DashboardClient({
   const [hideNotas, setHideNotas] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
-  const [expandOptional, setExpandOptional] = useState<Record<string, boolean>>({});
 
   const hora = new Date().getHours();
   const greeting = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
@@ -60,28 +61,6 @@ export default function DashboardClient({
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const pendingTasks = tasks.filter((t) => !t.done);
   const doneTasks = tasks.filter((t) => t.done && (!t.done_at || new Date(t.done_at) > sevenDaysAgo));
-
-  function handlePlanSelect(planName: string) {
-    const selected = plans.find((pl) => pl.name === planName);
-    if (!selected) { setForm((f) => ({ ...f, plan: planName })); return; }
-    if (form.start_date) {
-      const end = new Date(form.start_date);
-      end.setDate(end.getDate() + selected.duration_days);
-      setForm((f) => ({ ...f, plan: planName, plan_end: end.toISOString().split("T")[0], sessions: String(selected.sessions) }));
-    } else {
-      setForm((f) => ({ ...f, plan: planName, sessions: String(selected.sessions) }));
-    }
-  }
-
-  function handleStartDateChange(date: string) {
-    setForm((f) => {
-      const selected = plans.find((pl) => pl.name === f.plan);
-      if (!selected || !date) return { ...f, start_date: date };
-      const end = new Date(date);
-      end.setDate(end.getDate() + selected.duration_days);
-      return { ...f, start_date: date, plan_end: end.toISOString().split("T")[0] };
-    });
-  }
 
   async function addTask() {
     if (!newTask.trim()) return;
@@ -117,40 +96,7 @@ export default function DashboardClient({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Não autenticado");
 
-      if (modal === "paciente") {
-        const patientId = `PAC-${String(Date.now()).slice(-6)}`;
-        const { error: pErr } = await supabase.from("patients").insert({
-          id: patientId, user_id: user.id, name: form.name,
-          phone: form.phone ?? "", plan: form.plan ?? "",
-          start_date: form.start_date ?? new Date().toISOString().split("T")[0],
-          notes: form.notes ?? "",
-        });
-        if (pErr) throw pErr;
-        if (expandOptional.atendimento && form.apt_date) {
-          // Se não preencher a próxima consulta, calcula automaticamente +30 dias
-          let calculatedNextDate = form.apt_next_date || null;
-          if (!calculatedNextDate) {
-            const next = new Date(form.apt_date);
-            next.setDate(next.getDate() + 30);
-            calculatedNextDate = next.toISOString().split("T")[0];
-          }
-          await supabase.from("appointments").insert({
-            id: `APT-${Date.now()}`, user_id: user.id, patient_id: patientId,
-            date: form.apt_date, weight: form.apt_weight ? Number(form.apt_weight) : null,
-            evaluation: form.apt_evaluation ?? "", conduct: form.apt_conduct ?? "",
-            next_date: calculatedNextDate,
-          });
-        }
-        if (expandOptional.financeiro && form.fin_amount) {
-          await supabase.from("financial").insert({
-            user_id: user.id, patient_id: patientId,
-            description: `Plano ${form.plan ?? ""}`,
-            amount: Number(form.fin_amount), type: "receita",
-            status: Number(form.fin_paid ?? 0) >= Number(form.fin_amount) ? "pago" : "pendente",
-            notes: `Pago: R$${form.fin_paid ?? 0} | ${form.fin_method ?? "PIX"}`,
-          });
-        }
-      } else if (modal === "atendimento") {
+      if (modal === "atendimento") {
         const apptDate = form.date ?? new Date().toISOString().split("T")[0];
         let calculatedNextDate = form.next_date || null;
         if (!calculatedNextDate) {
@@ -166,15 +112,19 @@ export default function DashboardClient({
         });
         if (error) throw error;
       } else if (modal === "financeiro") {
+        const totalNum = Number(form.total_value || 0);
+        const paidNum = Number(form.paid_value || 0);
         const { error } = await supabase.from("financial").insert({
-          user_id: user.id, patient_id: form.patient_id,
-          description: form.description, amount: Number(form.amount),
-          type: form.type ?? "receita", status: form.status ?? "pendente",
-          due_date: form.due_date ?? null,
+          id: `FIN-${Date.now()}`, user_id: user.id, patient_id: form.patient_id,
+          date: form.date ?? new Date().toISOString().split("T")[0],
+          total_value: totalNum, paid_value: paidNum,
+          pay_method: form.pay_method ?? "PIX",
+          status: paidNum >= totalNum ? "PAGO" : "PENDENTE",
+          notes: form.notes ?? "",
         });
         if (error) throw error;
       }
-      setModal(null); setForm({}); setExpandOptional({});
+      setModal(null); setForm({});
       window.location.reload();
     } catch (e) {
       console.error("Erro ao salvar:", e);
@@ -199,7 +149,7 @@ export default function DashboardClient({
           <p className="text-ink-secondary text-sm mt-0.5 capitalize">{dateLabel}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => { setModal("paciente"); setForm({}); setExpandOptional({}); }}
+          <button onClick={() => setShowWizard(true)}
             className="flex items-center gap-1.5 h-9 px-3 bg-brand hover:bg-brand-dark text-white text-sm font-medium rounded-sm transition-colors shadow-brand">
             <Plus size={14} /> Novo paciente
           </button>
@@ -404,75 +354,6 @@ export default function DashboardClient({
             </div>
             <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3">
 
-              {modal === "paciente" && <>
-                <Field label="Nome completo *" value={form.name ?? ""} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Ex: Ana Carolina Souza" />
-                <Field label="WhatsApp" value={form.phone ?? ""} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} placeholder="(82) 99999-9999" />
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-ink-secondary mb-1">Plano *</label>
-                    <select value={form.plan ?? ""} onChange={(e) => handlePlanSelect(e.target.value)}
-                      className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-                      <option value="">Selecionar plano...</option>
-                      {plans.map((pl) => <option key={pl.id} value={pl.name}>{pl.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-ink-secondary mb-1">Consultas no plano</label>
-                    <input value={form.sessions ?? "—"} readOnly className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface-subtle text-ink text-sm cursor-not-allowed" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Data de início *" value={form.start_date ?? ""} onChange={handleStartDateChange} type="date" />
-                  <div>
-                    <label className="block text-xs font-medium text-ink-secondary mb-1">Término (automático)</label>
-                    <input value={form.plan_end ? new Date(form.plan_end + "T12:00:00").toLocaleDateString("pt-BR") : "Preencha acima"} readOnly
-                      className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface-subtle text-ink-muted text-sm cursor-not-allowed" />
-                  </div>
-                </div>
-                <Field label="Observações" value={form.notes ?? ""} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="Objetivos, alergias..." textarea />
-                <div className="border border-surface-muted rounded-md overflow-hidden">
-                  <button type="button" onClick={() => setExpandOptional((e) => ({ ...e, atendimento: !e.atendimento }))}
-                    className={cn("w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors",
-                      expandOptional.atendimento ? "bg-brand text-white" : "bg-surface-subtle text-ink hover:bg-surface-muted")}>
-                    <span>✓ 1º Atendimento</span><span className="text-xs opacity-70">{expandOptional.atendimento ? "▲" : "▼"}</span>
-                  </button>
-                  {expandOptional.atendimento && (
-                    <div className="p-4 flex flex-col gap-3 max-h-72 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Data" value={form.apt_date ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_date: v }))} type="date" />
-                        <Field label="Peso (kg)" value={form.apt_weight ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_weight: v }))} placeholder="75.5" type="number" />
-                      </div>
-                      <Field label="Avaliação clínica" value={form.apt_evaluation ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_evaluation: v }))} placeholder="Observações clínicas..." textarea />
-                      <Field label="Conduta" value={form.apt_conduct ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_conduct: v }))} placeholder="Plano alimentar..." textarea />
-                      <Field label="Próxima consulta" value={form.apt_next_date ?? ""} onChange={(v) => setForm((f) => ({ ...f, apt_next_date: v }))} type="date" />
-                      <p className="text-[11px] text-ink-muted -mt-1">Se deixar em branco, calculamos automaticamente com base no intervalo do plano.</p>
-                    </div>
-                  )}
-                </div>
-                <div className="border border-surface-muted rounded-md overflow-hidden">
-                  <button type="button" onClick={() => setExpandOptional((e) => ({ ...e, financeiro: !e.financeiro }))}
-                    className={cn("w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors",
-                      expandOptional.financeiro ? "bg-brand text-white" : "bg-surface-subtle text-ink hover:bg-surface-muted")}>
-                    <span>💰 Financeiro</span><span className="text-xs opacity-70">{expandOptional.financeiro ? "▲" : "▼"}</span>
-                  </button>
-                  {expandOptional.financeiro && (
-                    <div className="p-4 flex flex-col gap-3 max-h-72 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Valor total (R$)" value={form.fin_amount ?? ""} onChange={(v) => setForm((f) => ({ ...f, fin_amount: v }))} placeholder="0.00" type="number" />
-                        <Field label="Valor pago (R$)" value={form.fin_paid ?? ""} onChange={(v) => setForm((f) => ({ ...f, fin_paid: v }))} placeholder="0.00" type="number" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-ink-secondary mb-1">Forma de pagamento</label>
-                        <select value={form.fin_method ?? "PIX"} onChange={(e) => setForm((f) => ({ ...f, fin_method: e.target.value }))}
-                          className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-                          <option>PIX</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Transferência</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>}
-
               {modal === "atendimento" && <>
                 <div>
                   <label className="block text-xs font-medium text-ink-secondary mb-1">Paciente *</label>
@@ -504,25 +385,20 @@ export default function DashboardClient({
                     {patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
-                <Field label="Descrição *" value={form.description ?? ""} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="Mensalidade, consulta avulsa..." />
-                <Field label="Valor (R$) *" value={form.amount ?? ""} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} type="number" placeholder="350.00" />
+                <Field label="Data *" value={form.date ?? ""} onChange={(v) => setForm((f) => ({ ...f, date: v }))} type="date" />
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-ink-secondary mb-1">Tipo</label>
-                    <select value={form.type ?? "receita"} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                      className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-                      <option value="receita">Receita</option><option value="despesa">Despesa</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-ink-secondary mb-1">Status</label>
-                    <select value={form.status ?? "pendente"} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                      className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-                      <option value="pendente">Pendente</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option>
-                    </select>
-                  </div>
+                  <Field label="Valor total (R$) *" value={form.total_value ?? ""} onChange={(v) => setForm((f) => ({ ...f, total_value: v }))} type="number" placeholder="350.00" />
+                  <Field label="Valor pago (R$)" value={form.paid_value ?? ""} onChange={(v) => setForm((f) => ({ ...f, paid_value: v }))} type="number" placeholder="350.00" />
                 </div>
-                <Field label="Vencimento" value={form.due_date ?? ""} onChange={(v) => setForm((f) => ({ ...f, due_date: v }))} type="date" />
+                <div>
+                  <label className="block text-xs font-medium text-ink-secondary mb-1">Forma de pagamento</label>
+                  <select value={form.pay_method ?? "PIX"} onChange={(e) => setForm((f) => ({ ...f, pay_method: e.target.value }))}
+                    className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand">
+                    <option>PIX</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Transferência</option>
+                  </select>
+                </div>
+                <Field label="Observações" value={form.notes ?? ""} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="Mensalidade, consulta avulsa..." />
+                <p className="text-[11px] text-ink-muted -mt-1">O status (PAGO/PENDENTE) é calculado automaticamente comparando valor pago com valor total.</p>
               </>}
             </div>
             <div className="flex gap-2 px-5 pb-5 pt-3 border-t border-surface-muted shrink-0">
@@ -534,6 +410,14 @@ export default function DashboardClient({
             </div>
           </div>
         </div>
+      )}
+
+      {showWizard && (
+        <NovoPacienteWizard
+          plans={plans}
+          onClose={() => setShowWizard(false)}
+          onSaved={() => { setShowWizard(false); window.location.reload(); }}
+        />
       )}
     </div>
   );

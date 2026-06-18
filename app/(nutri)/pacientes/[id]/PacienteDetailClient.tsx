@@ -17,7 +17,7 @@ interface Appointment {
   id: string; date: string; weight?: number; evaluation?: string; conduct?: string; next_date?: string; notes?: string;
 }
 interface Financial {
-  id: string; description: string; amount: number; type: string; status: string; due_date?: string; notes?: string; created_at: string;
+  id: string; date: string; total_value: number; paid_value: number; pay_method: string; status: string; notes?: string; created_at: string;
 }
 interface Plan { id: string; name: string; duration_days: number; sessions: number; price?: number; }
 
@@ -113,22 +113,26 @@ export default function PacienteDetailClient({
   }
 
   function openFinForm(fin?: Financial) {
-    if (fin) setForm({ description: fin.description, amount: String(fin.amount), type: fin.type, status: fin.status, due_date: fin.due_date ?? "" });
-    else setForm({ type: "receita", status: "pendente" });
+    if (fin) setForm({ date: fin.date, total_value: String(fin.total_value), paid_value: String(fin.paid_value), pay_method: fin.pay_method, notes: fin.notes ?? "" });
+    else setForm({ date: new Date().toISOString().split("T")[0], pay_method: "PIX" });
     setFinModal(fin ?? "new");
   }
 
   async function saveFin() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const totalNum = Number(form.total_value || 0);
+    const paidNum = Number(form.paid_value || 0);
     const payload = {
-      description: form.description, amount: Number(form.amount),
-      type: form.type ?? "receita", status: form.status ?? "pendente", due_date: form.due_date || null,
+      date: form.date, total_value: totalNum, paid_value: paidNum,
+      pay_method: form.pay_method ?? "PIX",
+      status: paidNum >= totalNum ? "PAGO" : "PENDENTE",
+      notes: form.notes ?? "",
     };
     if (finModal !== "new" && finModal) {
       await supabase.from("financial").update(payload).eq("id", finModal.id);
     } else {
-      await supabase.from("financial").insert({ user_id: user?.id, patient_id: patient.id, ...payload });
+      await supabase.from("financial").insert({ id: `FIN-${Date.now()}`, user_id: user?.id, patient_id: patient.id, ...payload });
     }
     setFinModal(null);
     setLoading(false);
@@ -282,13 +286,19 @@ export default function PacienteDetailClient({
               {financial.map((f) => (
                 <div key={f.id} className="flex items-center justify-between border border-surface-muted rounded-md p-3.5">
                   <div>
-                    <p className="text-sm font-medium text-ink">{f.description}</p>
-                    <p className="text-xs text-ink-muted">{formatDate(f.created_at)} · <span className={cn("font-medium", f.status === "pago" ? "text-green-600" : f.status === "pendente" ? "text-amber-600" : "text-ink-muted")}>{f.status}</span></p>
+                    <p className="text-sm font-medium text-ink">{formatDate(f.date)} · {f.pay_method}</p>
+                    <p className="text-xs text-ink-muted">
+                      <span className={cn("font-medium", f.status === "PAGO" ? "text-green-600" : "text-amber-600")}>{f.status}</span>
+                      {f.notes && ` · ${f.notes}`}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <p className={cn("text-sm font-semibold", f.type === "receita" ? "text-green-600" : "text-red-500")}>
-                      {f.type === "receita" ? "+" : "-"}{formatCurrency(f.amount)}
-                    </p>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-green-600">{formatCurrency(f.paid_value)}</p>
+                      {f.paid_value < f.total_value && (
+                        <p className="text-xs text-ink-muted">de {formatCurrency(f.total_value)}</p>
+                      )}
+                    </div>
                     <button onClick={() => openFinForm(f)} className="text-ink-muted hover:text-ink p-1"><Edit2 size={13} /></button>
                     <button onClick={() => deleteFin(f.id)} className="text-ink-muted hover:text-red-500 p-1"><Trash2 size={13} /></button>
                   </div>
@@ -393,25 +403,19 @@ export default function PacienteDetailClient({
               <button onClick={() => setFinModal(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-3">
-              <Field label="Descrição" value={form.description ?? ""} onChange={(v) => setForm((f) => ({ ...f, description: v }))} />
-              <Field label="Valor (R$)" value={form.amount ?? ""} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} type="number" />
+              <Field label="Data *" value={form.date ?? ""} onChange={(v) => setForm((f) => ({ ...f, date: v }))} type="date" />
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-ink-secondary mb-1">Tipo</label>
-                  <select value={form.type ?? "receita"} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                    className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-                    <option value="receita">Receita</option><option value="despesa">Despesa</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-ink-secondary mb-1">Status</label>
-                  <select value={form.status ?? "pendente"} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                    className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand">
-                    <option value="pendente">Pendente</option><option value="pago">Pago</option><option value="cancelado">Cancelado</option>
-                  </select>
-                </div>
+                <Field label="Valor total (R$) *" value={form.total_value ?? ""} onChange={(v) => setForm((f) => ({ ...f, total_value: v }))} type="number" />
+                <Field label="Valor pago (R$)" value={form.paid_value ?? ""} onChange={(v) => setForm((f) => ({ ...f, paid_value: v }))} type="number" />
               </div>
-              <Field label="Vencimento" value={form.due_date ?? ""} onChange={(v) => setForm((f) => ({ ...f, due_date: v }))} type="date" />
+              <div>
+                <label className="block text-xs font-medium text-ink-secondary mb-1">Forma de pagamento</label>
+                <select value={form.pay_method ?? "PIX"} onChange={(e) => setForm((f) => ({ ...f, pay_method: e.target.value }))}
+                  className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand">
+                  <option>PIX</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>Dinheiro</option><option>Transferência</option>
+                </select>
+              </div>
+              <Field label="Observações" value={form.notes ?? ""} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} />
             </div>
             <div className="flex gap-2 px-5 pb-5 pt-3 border-t border-surface-muted shrink-0">
               <button onClick={() => setFinModal(null)} className="flex-1 h-9 border border-surface-muted rounded-sm text-sm text-ink hover:bg-surface-subtle">Cancelar</button>

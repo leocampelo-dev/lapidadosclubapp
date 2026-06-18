@@ -14,7 +14,7 @@ export default async function DashboardPage() {
     supabase.from("patients").select("*").eq("user_id", user!.id),
     supabase.from("appointments").select("*").eq("user_id", user!.id).order("date", { ascending: false }),
     supabase.from("checkins").select("id, patient_id, created_at, diet_score").order("created_at", { ascending: false }).limit(200),
-    supabase.from("financial").select("amount, type, status").eq("user_id", user!.id),
+    supabase.from("financial").select("total_value, paid_value, status").eq("user_id", user!.id),
     // colunas reais: id, text, done, done_at, created_at
     supabase.from("tasks").select("id, text, done, done_at, created_at").eq("user_id", user!.id).order("created_at", { ascending: false }),
     supabase.from("plans").select("*").eq("user_id", user!.id).order("duration_days"),
@@ -93,11 +93,11 @@ export default async function DashboardPage() {
   const pendentesCheckin = patients.filter((p) => !patientIdsWithCheckin.has(p.id)).length;
 
   const receitaTotal = financial
-    .filter((f) => f.type === "receita" && f.status === "pago")
-    .reduce((acc, f) => acc + Number(f.amount), 0);
+    .filter((f) => f.status === "PAGO")
+    .reduce((acc, f) => acc + Number(f.paid_value || 0), 0);
   const pendente = financial
-    .filter((f) => f.status === "pendente")
-    .reduce((acc, f) => acc + Number(f.amount), 0);
+    .filter((f) => f.status === "PENDENTE")
+    .reduce((acc, f) => acc + (Number(f.total_value || 0) - Number(f.paid_value || 0)), 0);
 
   return (
     <DashboardClient
