@@ -19,6 +19,8 @@ interface Profile {
   full_name?: string;
   instagram?: string;
   whatsapp?: string;
+  gemini_api_key?: string;
+  groq_api_key?: string;
   avatar_data?: string; // base64 da imagem
 }
 
@@ -117,6 +119,8 @@ export default function ConfiguracoesPage() {
       full_name: profile.full_name ?? "",
       instagram: profile.instagram ?? "",
       whatsapp: profile.whatsapp ?? "",
+      gemini_api_key: profile.gemini_api_key ?? "",
+      groq_api_key: profile.groq_api_key ?? "",
       avatar_data: profile.avatar_data ?? null,
     }, { onConflict: "user_id" });
 
@@ -282,6 +286,44 @@ export default function ConfiguracoesPage() {
                 <Field label="Nome de exibição" value={profile.full_name ?? ""} onChange={(v) => setProfile((p) => ({ ...p, full_name: v }))} placeholder="Ex: Dr. Leonardo" />
                 <Field label="WhatsApp" value={profile.whatsapp ?? ""} onChange={(v) => setProfile((p) => ({ ...p, whatsapp: v }))} placeholder="(82) 99999-9999" />
                 <Field label="Instagram" value={profile.instagram ?? ""} onChange={(v) => setProfile((p) => ({ ...p, instagram: v }))} placeholder="@seu.perfil" />
+
+                <div className="pt-3 border-t border-surface-muted">
+                  <p className="text-xs font-semibold text-ink mb-3 flex items-center gap-1.5">
+                    🤖 IA para análise de Check-ins
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-ink-secondary mb-1">
+                        Gemini API Key <span className="text-ink-muted font-normal">(Google AI Studio)</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={profile.gemini_api_key ?? ""}
+                        onChange={(e) => setProfile((p) => ({ ...p, gemini_api_key: e.target.value }))}
+                        placeholder="AIza..."
+                        className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-ink-secondary mb-1">
+                        Groq API Key <span className="text-ink-muted font-normal">(14.400 análises/dia grátis)</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={profile.groq_api_key ?? ""}
+                        onChange={(e) => setProfile((p) => ({ ...p, groq_api_key: e.target.value }))}
+                        placeholder="gsk_..."
+                        className="w-full h-9 px-3 rounded-sm border border-surface-muted bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+                      />
+                      <p className="text-[11px] text-ink-muted mt-1">
+                        Recomendado: grátis, rápido. Obtenha em{" "}
+                        <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                          console.groq.com
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {saveError && <p className="text-sm text-red-500 bg-red-50 px-3 py-2 rounded-sm mt-3">{saveError}</p>}

@@ -6,19 +6,20 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, Users, ClipboardList, Utensils,
+  LayoutDashboard, Users, ClipboardList, Activity, Utensils,
   Dumbbell, DollarSign, BookOpen, Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/pacientes", label: "Pacientes", icon: Users },
-  { href: "/checkins", label: "Check-ins", icon: ClipboardList },
-  { href: "/dietas", label: "Dietas", icon: Utensils },
-  { href: "/treinos", label: "Treinos", icon: Dumbbell },
-  { href: "/financeiro", label: "Financeiro", icon: DollarSign },
-  { href: "/membros", label: "Área de Membros", icon: BookOpen },
+  { href: "/dashboard",    label: "Dashboard",       icon: LayoutDashboard },
+  { href: "/pacientes",    label: "Pacientes",       icon: Users },
+  { href: "/atendimentos", label: "Atendimentos",    icon: ClipboardList },
+  { href: "/checkins", label: "Check-ins", icon: Activity },
+  { href: "/dietas",       label: "Dietas",          icon: Utensils },
+  { href: "/treinos",      label: "Treinos",         icon: Dumbbell },
+  { href: "/financeiro",   label: "Financeiro",      icon: DollarSign },
+  { href: "/membros",      label: "Área de Membros", icon: BookOpen },
 ];
 
 export default function NutriSidebar({ userName: initialName }: { userName: string }) {
