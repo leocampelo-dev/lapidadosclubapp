@@ -267,7 +267,9 @@ export default function CheckinsHub({
                         style={{ background:tier.bg, color:tier.color }}>{tier.name}</span>
                     )}
                     {weekCheckin && (
-                      <span className="text-[10px] text-ink-muted">Score: {weekCheckin.lapidados_score ?? 0}/100 · Sem {weekCheckin.week_number}</span>
+                      <span className="text-[10px] text-ink-muted">
+                        Score: {weekCheckin.lapidados_score ?? 0}/100 · Sem {weekCheckin.week_number} · {new Date(weekCheckin.created_at).toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit" })}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -439,7 +441,12 @@ export default function CheckinsHub({
                   return (
                     <div key={c.id} className="border border-surface-muted rounded-md overflow-hidden">
                       <div className="flex items-center justify-between px-3 py-2.5 bg-surface-subtle">
-                        <p className="text-xs font-semibold text-ink">Semana {c.week_number}/{c.year}</p>
+                        <div>
+                          <p className="text-xs font-semibold text-ink">Semana {c.week_number}/{c.year}</p>
+                          <p className="text-[10px] text-ink-muted">
+                            {c.created_at ? `Respondido em ${new Date(c.created_at).toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" })} às ${new Date(c.created_at).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}` : ""}
+                          </p>
+                        </div>
                         <span className="text-xs font-bold px-2 py-0.5 rounded-full"
                           style={{ background:t.bg, color:t.color }}>
                           {c.lapidados_score ?? 0}pts · {t.name}

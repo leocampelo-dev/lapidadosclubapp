@@ -241,10 +241,16 @@ export default function CheckinForm({
             <div className="flex flex-col gap-2">
               {history.slice(0, 6).map((c) => {
                 const t = getWeekTier(c.lapidados_score ?? 0);
+                const sentDate = c.created_at
+                  ? new Date(c.created_at).toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" })
+                  : null;
                 return (
                   <div key={c.id}
                     className="flex items-center justify-between bg-white/5 border border-white/8 rounded-xl px-4 py-3">
-                    <p className="text-white/50 text-sm">Sem {c.week_number}/{c.year}</p>
+                    <div>
+                      <p className="text-white/50 text-sm">Sem {c.week_number}/{c.year}</p>
+                      {sentDate && <p className="text-white/25 text-[10px] mt-0.5">Respondido em {sentDate}</p>}
+                    </div>
                     <span className="text-sm font-black" style={{ color:t.color }}>
                       {c.lapidados_score ?? 0}pts
                     </span>
@@ -263,8 +269,11 @@ export default function CheckinForm({
     const tier = getWeekTier(finalScore);
     return (
       <div style={bg} className="max-w-md mx-auto px-4 pt-8 pb-28 flex flex-col items-center">
-        <p className="text-white/30 text-xs font-bold uppercase tracking-widest mb-2">Semana {currentWeek}</p>
+        <p className="text-white/30 text-xs font-bold uppercase tracking-widest mb-2">Semana {currentWeek}/{currentYear}</p>
         <p className="text-xl font-black mb-1" style={{ color:tier.color }}>{tier.name}</p>
+        <p className="text-white/20 text-[10px] mb-2">
+          Enviado em {new Date().toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" })} às {new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}
+        </p>
         <ScoreRing score={animScore} color={tier.color} />
         <p className="text-white/40 text-sm mb-6">Check-in enviado com sucesso! 🎉</p>
 
@@ -314,7 +323,7 @@ export default function CheckinForm({
   const pct   = Math.round((step / STEPS) * 100);
 
   return (
-    <div style={bg} className="max-w-md mx-auto flex flex-col" style2={{ minHeight:"100vh" }}>
+    <div style={{ ...bg, minHeight:"100vh" }} className="max-w-md mx-auto flex flex-col">
       {/* Barra de progresso */}
       <div className="px-4 pt-6 pb-3 shrink-0">
         <div className="flex items-center justify-between mb-2">
