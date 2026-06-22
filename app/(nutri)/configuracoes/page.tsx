@@ -347,11 +347,11 @@ export default function ConfiguracoesPage() {
                   <p>🔒 Dados isolados por nutricionista via RLS</p>
                 </div>
               </div>
-              <div className="bg-white border border-red-200 rounded-md shadow-card p-5">
-                <h2 className="text-sm font-semibold text-red-600 mb-1">Zona de perigo</h2>
-                <p className="text-xs text-ink-muted mb-4">Ações irreversíveis.</p>
+              <div className="bg-white border border-surface-muted rounded-md shadow-card p-5">
+                <h2 className="text-sm font-semibold text-ink mb-1">Sessão</h2>
+                <p className="text-xs text-ink-muted mb-4">Você será redirecionado para a tela de login.</p>
                 <button onClick={handleLogout}
-                  className="flex items-center gap-2 h-9 px-4 border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium rounded-sm transition-colors">
+                  className="flex items-center gap-2 h-9 px-4 border border-surface-muted text-ink hover:bg-surface-subtle text-sm font-medium rounded-sm transition-colors">
                   <LogOut size={14} /> Sair da conta
                 </button>
               </div>

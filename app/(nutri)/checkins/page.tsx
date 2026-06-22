@@ -1,14 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
 import CheckinsHub from "./CheckinsHub";
 
+function isoWeek(d = new Date()) {
+  const u = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  u.setUTCDate(u.getUTCDate() + 4 - (u.getUTCDay() || 7));
+  const ys = new Date(Date.UTC(u.getUTCFullYear(), 0, 1));
+  return {
+    week: Math.ceil((((u.getTime() - ys.getTime()) / 86400000) + 1) / 7),
+    year: u.getUTCFullYear(),
+  };
+}
+
 export default async function CheckinsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const now = new Date();
-  const jan1 = new Date(now.getFullYear(), 0, 1);
-  const currentWeek = Math.ceil(((now.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
-  const currentYear = now.getFullYear();
+  const { week: currentWeek, year: currentYear } = isoWeek();
 
   const [checkinsRes, patientsRes, profileRes] = await Promise.all([
     supabase.from("checkins").select("*").order("created_at", { ascending: false }).limit(2000),
@@ -21,11 +28,22 @@ export default async function CheckinsPage() {
   const geminiKey = profileRes.data?.gemini_api_key ?? "";
   const groqKey = profileRes.data?.groq_api_key ?? "";
 
-  // Filtra checkins apenas dos pacientes deste nutri
   const patientIds = new Set(patients.map((p) => p.id));
   const checkins = allCheckins.filter((c) => patientIds.has(c.patient_id));
 
-  // Monta dados enriquecidos por paciente
+  function calcStreak(history: typeof checkins) {
+    if (!history.length) return 0;
+    let s = 1;
+    for (let i = 1; i < history.length; i++) {
+      const a = history[i - 1].year * 100 + history[i - 1].week_number;
+      const b = history[i].year * 100 + history[i].week_number;
+      const d = a - b;
+      if (d === 1 || d === -51) s++;
+      else break;
+    }
+    return s;
+  }
+
   const enriched = patients.map((p) => {
     const patCheckins = checkins
       .filter((c) => c.patient_id === p.id)
@@ -37,38 +55,24 @@ export default async function CheckinsPage() {
     const totalPts = patCheckins.reduce((s, c) => s + (c.lapidados_score || 0), 0);
     const weekCheckin = patCheckins.find(
       (c) => c.week_number === currentWeek && c.year === currentYear
-    );
+    ) ?? null;
 
-    // Streak: semanas consecutivas com check-in (contando de trás pra frente)
-    let streak = 0;
-    if (patCheckins.length > 0) {
-      let expectedWeek = currentWeek;
-      let expectedYear = currentYear;
-      for (const c of patCheckins) {
-        if (c.week_number === expectedWeek && c.year === expectedYear) {
-          streak++;
-          expectedWeek--;
-          if (expectedWeek === 0) { expectedWeek = 52; expectedYear--; }
-        } else break;
-      }
-    }
+    const streak = calcStreak(patCheckins);
 
-    // Risco de evasão: sem check-in nas últimas 2 semanas
     const recentCheckins = patCheckins.filter((c) => {
       const diff = (currentYear - c.year) * 52 + (currentWeek - c.week_number);
       return diff <= 2;
     });
     const evasionRisk = recentCheckins.length === 0 && patCheckins.length > 0;
-    const neverCheckedIn = patCheckins.length === 0;
 
     return {
       patient: p,
       checkins: patCheckins,
-      weekCheckin: weekCheckin ?? null,
+      weekCheckin,
       totalPts,
       streak,
       evasionRisk,
-      neverCheckedIn,
+      neverCheckedIn: patCheckins.length === 0,
       hasThisWeek: !!weekCheckin,
     };
   });
