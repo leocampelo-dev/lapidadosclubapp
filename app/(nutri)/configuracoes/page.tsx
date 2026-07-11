@@ -39,13 +39,12 @@ export default function ConfiguracoesPage() {
   const [saveError, setSaveError] = useState("");
   const [userId, setUserId] = useState<string>("");
 
-  // Crop de imagem
+  // Crop de imagem — abordagem com object-fit/object-position
   const [cropImage, setCropImage] = useState<string | null>(null);
-  const [cropPos, setCropPos] = useState({ x: 50, y: 50 }); // % da posição
-  const [cropZoom, setCropZoom] = useState(1);
-  const cropContainerRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-
+  const [cropX, setCropX] = useState(50); // 0-100%
+  const [cropY, setCropY] = useState(50); // 0-100%
+  const [cropZoom, setCropZoom] = useState(100); // 100-200%
+  const dragRef = useRef<{ startX: number; startY: number; startCropX: number; startCropY: number } | null>(null);
   // Modal de plano
   const [planModal, setPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
@@ -134,18 +133,15 @@ export default function ConfiguracoesPage() {
     setLoading(false);
   }
 
-  // Abre o editor de crop ao escolher arquivo
   function handleFileSelect(file: File) {
     const reader = new FileReader();
     reader.onload = () => {
       setCropImage(reader.result as string);
-      setCropPos({ x: 50, y: 50 });
-      setCropZoom(1);
+      setCropX(50); setCropY(50); setCropZoom(100);
     };
     reader.readAsDataURL(file);
   }
 
-  // Gera o avatar final (crop simples via canvas) e salva como base64
   async function confirmCrop() {
     if (!cropImage) return;
     const img = new Image();
@@ -153,35 +149,46 @@ export default function ConfiguracoesPage() {
     await new Promise((res) => { img.onload = res; });
 
     const canvas = document.createElement("canvas");
-    const size = 300;
-    canvas.width = size;
-    canvas.height = size;
+    const OUT = 300;
+    canvas.width = OUT; canvas.height = OUT;
     const ctx = canvas.getContext("2d")!;
 
-    // Calcula área de origem baseada no zoom e posição
-    const scale = cropZoom;
-    const srcSize = Math.min(img.width, img.height) / scale;
-    const srcX = (img.width - srcSize) * (cropPos.x / 100);
-    const srcY = (img.height - srcSize) * (cropPos.y / 100);
+    // A imagem é exibida com zoom (scale) e posição (cropX, cropY).
+    // Precisamos reproduzir exatamente o que o preview mostra.
+    const scale = cropZoom / 100;
+    const dispW = img.width  * scale;
+    const dispH = img.height * scale;
+    // offset da imagem no container (o container é quadrado = OUT px)
+    const offsetX = (cropX / 100) * (OUT - dispW);
+    const offsetY = (cropY / 100) * (OUT - dispH);
 
-    ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, size, size);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-
+    ctx.drawImage(img, 0, 0, img.width, img.height, offsetX, offsetY, dispW, dispH);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
     setProfile((p) => ({ ...p, avatar_data: dataUrl }));
     setCropImage(null);
   }
 
-  function handleDragStart() { dragging.current = true; }
-  function handleDragEnd() { dragging.current = false; }
-  function handleDragMove(e: React.MouseEvent | React.TouchEvent) {
-    if (!dragging.current || !cropContainerRef.current) return;
-    const rect = cropContainerRef.current.getBoundingClientRect();
+  function onDragStart(e: React.MouseEvent | React.TouchEvent) {
+    e.preventDefault();
     const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
     const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
-    const x = ((clientX - rect.left) / rect.width) * 100;
-    const y = ((clientY - rect.top) / rect.height) * 100;
-    setCropPos({ x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) });
+    dragRef.current = { startX: clientX, startY: clientY, startCropX: cropX, startCropY: cropY };
   }
+
+  function onDragMove(e: React.MouseEvent | React.TouchEvent) {
+    if (!dragRef.current) return;
+    e.preventDefault();
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    const dx = clientX - dragRef.current.startX;
+    const dy = clientY - dragRef.current.startY;
+    // 240px = tamanho do container de preview
+    const newX = Math.max(0, Math.min(100, dragRef.current.startCropX + (dx / 240) * 100));
+    const newY = Math.max(0, Math.min(100, dragRef.current.startCropY + (dy / 240) * 100));
+    setCropX(newX); setCropY(newY);
+  }
+
+  function onDragEnd() { dragRef.current = null; }
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -409,44 +416,58 @@ export default function ConfiguracoesPage() {
               <button onClick={() => setCropImage(null)} className="text-ink-muted hover:text-ink"><X size={16} /></button>
             </div>
             <div className="p-5">
-              <p className="text-xs text-ink-muted mb-3">Arraste para posicionar e use o controle para o zoom</p>
+              <p className="text-xs text-ink-muted mb-3">Arraste para reposicionar · use o slider para zoom</p>
+
+              {/* Preview circular — 240x240px fixo */}
               <div
-                ref={cropContainerRef}
-                onMouseDown={handleDragStart}
-                onMouseUp={handleDragEnd}
-                onMouseLeave={handleDragEnd}
-                onMouseMove={handleDragMove}
-                onTouchStart={handleDragStart}
-                onTouchEnd={handleDragEnd}
-                onTouchMove={handleDragMove}
-                className="relative w-full aspect-square rounded-full overflow-hidden border-2 border-brand mx-auto cursor-move bg-surface-subtle"
-                style={{ maxWidth: 240 }}
+                onMouseDown={onDragStart}
+                onMouseMove={onDragMove}
+                onMouseUp={onDragEnd}
+                onMouseLeave={onDragEnd}
+                onTouchStart={onDragStart}
+                onTouchMove={onDragMove}
+                onTouchEnd={onDragEnd}
+                className="relative mx-auto rounded-full overflow-hidden border-2 border-brand cursor-move bg-surface-subtle select-none"
+                style={{ width: 240, height: 240 }}
               >
                 <img
                   src={cropImage}
                   alt="Preview"
-                  className="absolute select-none pointer-events-none"
-                  style={{
-                    width: `${cropZoom * 100}%`,
-                    left: `${cropPos.x}%`,
-                    top: `${cropPos.y}%`,
-                    transform: "translate(-50%, -50%)",
-                  }}
                   draggable={false}
+                  className="absolute pointer-events-none"
+                  style={{
+                    width: `${cropZoom}%`,
+                    height: `${cropZoom}%`,
+                    objectFit: "cover",
+                    left: `${cropX * (1 - cropZoom / 100)}%`,
+                    top:  `${cropY  * (1 - cropZoom / 100)}%`,
+                    transform: "none",
+                  }}
                 />
               </div>
+
+              {/* Zoom slider */}
               <div className="flex items-center gap-3 mt-4">
-                <span className="text-xs text-ink-muted">Zoom</span>
-                <input type="range" min="1" max="3" step="0.1" value={cropZoom}
+                <span className="text-xs text-ink-muted w-8">Zoom</span>
+                <input
+                  type="range" min={100} max={300} step={1}
+                  value={cropZoom}
                   onChange={(e) => setCropZoom(Number(e.target.value))}
-                  className="flex-1 h-2 bg-surface-subtle rounded-full appearance-none cursor-pointer
+                  className="flex-1 h-2 rounded-full appearance-none cursor-pointer bg-surface-muted
                              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4
-                             [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand" />
+                             [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full
+                             [&::-webkit-slider-thumb]:bg-brand [&::-webkit-slider-thumb]:cursor-pointer"
+                />
+                <span className="text-xs text-ink-muted w-10 text-right">{cropZoom}%</span>
               </div>
             </div>
             <div className="flex gap-2 px-5 pb-5">
-              <button onClick={() => setCropImage(null)} className="flex-1 h-9 border border-surface-muted rounded-sm text-sm text-ink hover:bg-surface-subtle">Cancelar</button>
-              <button onClick={confirmCrop} className="flex-1 h-9 bg-brand hover:bg-brand-dark text-white rounded-sm text-sm font-medium shadow-brand">
+              <button onClick={() => setCropImage(null)}
+                className="flex-1 h-9 border border-surface-muted rounded-sm text-sm text-ink hover:bg-surface-subtle">
+                Cancelar
+              </button>
+              <button onClick={confirmCrop}
+                className="flex-1 h-9 bg-brand hover:bg-brand-dark text-white rounded-sm text-sm font-medium shadow-brand">
                 Usar foto
               </button>
             </div>

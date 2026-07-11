@@ -348,7 +348,7 @@ export default function DashboardClient({
           <div className="bg-white rounded-md shadow-xl w-full max-w-lg flex flex-col" style={{ maxHeight: "calc(100vh - 4rem)" }}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-surface-muted shrink-0">
               <h3 className="text-sm font-semibold text-ink">
-                {modal === "paciente" ? "Novo paciente" : modal === "atendimento" ? "Novo atendimento" : "Novo lançamento"}
+                {modal === "atendimento" ? "Novo atendimento" : "Novo lançamento"}
               </h3>
               <button onClick={() => setModal(null)} className="text-ink-muted hover:text-ink"><X size={18} /></button>
             </div>
