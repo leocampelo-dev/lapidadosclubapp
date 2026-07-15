@@ -3,6 +3,27 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
+    // --- Guarda de autorização: só o nutricionista logado pode convidar. ---
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+
+    if (roleData?.role !== "nutri") {
+      return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+    }
+    // --- Fim da guarda ---
+
     const { email, patientId, patientName } = await request.json();
 
     if (!email || !patientId) {
@@ -15,6 +36,18 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+    // Garante que o patientId pertence de fato a este nutricionista antes de
+    // vincular qualquer conta a ele.
+    const { data: patientRow } = await adminSupabase
+      .from("patients")
+      .select("id")
+      .eq("id", patientId)
+      .single();
+
+    if (!patientRow) {
+      return NextResponse.json({ error: "Paciente não encontrado" }, { status: 404 });
+    }
 
     // 1. Verifica se já existe usuário com esse email
     const { data: existingUsers } = await adminSupabase.auth.admin.listUsers();
