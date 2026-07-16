@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     } else {
       // 2. Cria o usuário via invite (envia email automático)
       const { data: inviteData, error: inviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/auth/callback`,
+        redirectTo: `${request.nextUrl.origin}/auth/confirm?next=/auth/nova-senha`,
         data: { patient_name: patientName },
       });
 

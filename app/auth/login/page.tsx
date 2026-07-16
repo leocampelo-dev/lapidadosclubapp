@@ -50,7 +50,7 @@ export default function LoginPage() {
     setInfo("");
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/nova-senha`,
+      redirectTo: `${window.location.origin}/auth/confirm?next=/auth/nova-senha`,
     });
 
     setLoading(false);
