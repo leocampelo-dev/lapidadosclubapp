@@ -58,6 +58,7 @@ const config: Config = {
         "ring-fill": "ring-fill 1s ease-out forwards",
         "fade-up": "fade-up 0.3s ease-out",
         "pulse-brand": "pulse-brand 2s ease-in-out infinite",
+        "rank-pulse": "rank-pulse 2.5s ease-in-out infinite",
       },
       keyframes: {
         "ring-fill": {
@@ -71,6 +72,10 @@ const config: Config = {
         "pulse-brand": {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.7" },
+        },
+        "rank-pulse": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.08)" },
         },
       },
     },

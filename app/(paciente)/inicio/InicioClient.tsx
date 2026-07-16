@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import Link from "next/link";
 import { Utensils, Dumbbell, ChevronRight } from "lucide-react";
 
@@ -51,6 +50,7 @@ export default function InicioClient({
   avgDiet, avgTraining, avgSleep, weekCheckin, currentWeek, currentYear, recentCheckins,
 }: Props) {
   const [animPts, setAnimPts] = useState(0);
+  const [barPct, setBarPct] = useState(0);
   const rank     = getRank(totalPts);
   const nextRank = [...RANKS].find((r) => r.min > totalPts);
   const pct      = nextRank ? Math.round(((totalPts - rank.min) / (nextRank.min - rank.min)) * 100) : 100;
@@ -74,21 +74,26 @@ export default function InicioClient({
     return () => clearInterval(id);
   }, [totalPts]);
 
+  useEffect(() => {
+    // pequeno delay pra barra animar de 0 até o valor real via transição CSS
+    const t = setTimeout(() => setBarPct(pct), 300);
+    return () => clearTimeout(t);
+  }, [pct]);
+
   const bg = { background:"linear-gradient(180deg,#0d0d0d 0%,#111111 60%,#180800 100%)", minHeight:"100vh" };
 
   return (
     <div style={bg} className="max-w-md mx-auto pb-28 px-4 pt-6">
 
       {/* Saudação */}
-      <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} transition={{ duration:.35 }} className="mb-5">
+      <div className="mb-5 animate-fade-up">
         <p className="text-white/30 text-xs font-medium uppercase tracking-widest">{greeting}, {firstName}</p>
         <p className="text-white text-xl font-black mt-0.5">SUA EVOLUÇÃO CONTINUA.</p>
-      </motion.div>
+      </div>
 
       {/* Card de Rank */}
-      <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.05, duration:.4 }}
-        className="rounded-2xl p-5 mb-4 border border-white/10 relative overflow-hidden"
-        style={{ background:`linear-gradient(135deg,${rank.color}15,transparent 70%)` }}>
+      <div className="rounded-2xl p-5 mb-4 border border-white/10 relative overflow-hidden animate-fade-up"
+        style={{ background:`linear-gradient(135deg,${rank.color}15,transparent 70%)`, animationDelay:"0.05s" }}>
         <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full blur-3xl opacity-20" style={{ background:rank.color }} />
         <div className="flex items-center justify-between mb-4 relative">
           <div>
@@ -125,8 +130,8 @@ export default function InicioClient({
               <span className="font-bold" style={{ color:nextRank.color }}>{nextRank.icon} {nextRank.name}</span>
             </div>
             <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <motion.div className="h-full rounded-full" style={{ background:rank.color }}
-                initial={{ width:0 }} animate={{ width:`${pct}%` }} transition={{ delay:.3, duration:.8, ease:"easeOut" }} />
+              <div className="h-full rounded-full transition-[width] duration-[800ms] ease-out"
+                style={{ background:rank.color, width:`${barPct}%` }} />
             </div>
             <div className="flex justify-between text-[10px] mt-1">
               <span className="text-white/25">{totalPts} pts</span>
@@ -134,10 +139,10 @@ export default function InicioClient({
             </div>
           </div>
         )}
-      </motion.div>
+      </div>
 
       {/* Check-in */}
-      <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.1, duration:.4 }} className="mb-4">
+      <div className="mb-4 animate-fade-up" style={{ animationDelay:"0.1s" }}>
         {weekCheckin ? (
           <div className="rounded-2xl p-4 border border-green-500/20 bg-green-500/5 flex items-center justify-between">
             <div>
@@ -148,7 +153,7 @@ export default function InicioClient({
           </div>
         ) : (
           <Link href="/checkin">
-            <motion.div whileTap={{ scale:.97 }} className="rounded-2xl p-5 relative overflow-hidden cursor-pointer"
+            <div className="rounded-2xl p-5 relative overflow-hidden cursor-pointer active:scale-[0.97] transition-transform"
               style={{ background:"linear-gradient(135deg,#E85D04,#C44D00)", boxShadow:"0 4px 24px rgba(232,93,4,.4)" }}>
               <div className="absolute -right-4 -top-4 w-20 h-20 bg-white/5 rounded-full" />
               <div className="flex items-center justify-between relative">
@@ -158,14 +163,13 @@ export default function InicioClient({
                 </div>
                 <ChevronRight size={24} className="text-white/70" />
               </div>
-            </motion.div>
+            </div>
           </Link>
         )}
-      </motion.div>
+      </div>
 
       {/* Stats */}
-      <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.15, duration:.4 }}
-        className="grid grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-3 gap-2 mb-3 animate-fade-up" style={{ animationDelay:"0.15s" }}>
         {[
           { icon:"📋", label:"Check-ins",    value:checkinCount         },
           { icon:"🔥", label:"Pts acum.",    value:totalPts             },
@@ -177,11 +181,10 @@ export default function InicioClient({
             <p className="text-white/30 text-[10px] mt-0.5">{s.label}</p>
           </div>
         ))}
-      </motion.div>
+      </div>
 
       {(avgDiet || avgTraining || avgSleep) && (
-        <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.18, duration:.4 }}
-          className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-4 animate-fade-up" style={{ animationDelay:"0.18s" }}>
           {[
             { icon:"🥗", label:"Média dieta",  value:avgDiet     },
             { icon:"🏋️", label:"Média treino", value:avgTraining },
@@ -193,29 +196,27 @@ export default function InicioClient({
               <p className="text-white/30 text-[10px] mt-0.5">{s.label}</p>
             </div>
           ) : null)}
-        </motion.div>
+        </div>
       )}
 
       {/* Dieta e Treino */}
-      <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.2, duration:.4 }}
-        className="grid grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-2 gap-3 mb-5 animate-fade-up" style={{ animationDelay:"0.2s" }}>
         {[
           { href:"/dieta",  label:"Minha Dieta",  sub:"Ver plano alimentar", icon:Utensils },
           { href:"/treino", label:"Meu Treino",   sub:"Ver exercícios",      icon:Dumbbell },
         ].map(({ href, label, sub, icon:Icon }) => (
           <Link key={href} href={href}>
-            <motion.div whileTap={{ scale:.97 }}
-              className="rounded-2xl p-4 border border-white/10 bg-white/5 flex flex-col gap-2 cursor-pointer hover:bg-white/8 transition-colors h-full">
+            <div className="rounded-2xl p-4 border border-white/10 bg-white/5 flex flex-col gap-2 cursor-pointer hover:bg-white/8 active:scale-[0.97] transition-all h-full">
               <Icon size={20} className="text-brand" />
               <p className="text-white font-bold text-sm">{label}</p>
               <p className="text-white/30 text-xs">{sub}</p>
-            </motion.div>
+            </div>
           </Link>
         ))}
-      </motion.div>
+      </div>
 
       {/* Jornada */}
-      <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.25, duration:.4 }} className="mb-5">
+      <div className="mb-5 animate-fade-up" style={{ animationDelay:"0.25s" }}>
         <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest mb-3">🗺️ Sua Jornada</p>
         <div className="bg-white/5 border border-white/8 rounded-2xl p-5">
           <div className="flex items-center justify-between relative">
@@ -225,17 +226,15 @@ export default function InicioClient({
               const isCurrent = getRank(totalPts).min === r.min;
               return (
                 <div key={r.name} className="flex flex-col items-center gap-1.5 relative z-10">
-                  <motion.div
-                    animate={isCurrent ? { scale:[1,1.08,1] } : {}}
-                    transition={{ repeat:Infinity, duration:2.5 }}
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-xl border-2 transition-all"
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-xl border-2 transition-all ${isCurrent ? "animate-rank-pulse" : ""}`}
                     style={{
                       background: unlocked ? `${r.color}20` : "rgba(255,255,255,.04)",
                       borderColor: isCurrent ? r.color : unlocked ? `${r.color}40` : "rgba(255,255,255,.1)",
                       boxShadow: isCurrent ? `0 0 16px ${r.glow}` : "none",
                     }}>
                     <span style={{ filter:unlocked ? "none" : "grayscale(1) opacity(.25)" }}>{r.icon}</span>
-                  </motion.div>
+                  </div>
                   <p className="text-[9px] font-bold text-center"
                     style={{ color:isCurrent ? r.color : unlocked ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.15)" }}>
                     {r.name}
@@ -246,10 +245,10 @@ export default function InicioClient({
           </div>
           <p className="text-white/20 text-[10px] text-center mt-3">Sem missão = sem evolução</p>
         </div>
-      </motion.div>
+      </div>
 
       {/* Conquistas */}
-      <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.3, duration:.4 }} className="mb-5">
+      <div className="mb-5 animate-fade-up" style={{ animationDelay:"0.3s" }}>
         <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest mb-3">🏅 Conquistas</p>
         {Object.entries(
           ACHIEVEMENTS.reduce((acc, a) => { if (!acc[a.category]) acc[a.category] = []; acc[a.category].push(a); return acc; }, {} as Record<string, Achievement[]>)
@@ -260,24 +259,24 @@ export default function InicioClient({
               {items.map((a) => {
                 const unlocked = unlockedIds.has(a.id);
                 return (
-                  <motion.div key={a.id} whileTap={unlocked ? { scale:.95 } : {}}
-                    className="rounded-xl p-3 flex flex-col items-center gap-1.5 border relative overflow-hidden"
+                  <div key={a.id}
+                    className={`rounded-xl p-3 flex flex-col items-center gap-1.5 border relative overflow-hidden transition-transform ${unlocked ? "active:scale-95" : ""}`}
                     style={{ background:unlocked ? `${rank.color}10` : "rgba(255,255,255,.03)", borderColor:unlocked ? `${rank.color}30` : "rgba(255,255,255,.07)" }}>
                     {unlocked && <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-brand" />}
                     <span className="text-2xl" style={{ filter:unlocked ? "none" : "grayscale(1) opacity(.2)" }}>{a.icon}</span>
                     <p className="text-[10px] font-medium text-center leading-tight"
                       style={{ color:unlocked ? "rgba(255,255,255,.8)" : "rgba(255,255,255,.2)" }}>{a.name}</p>
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
           </div>
         ))}
-      </motion.div>
+      </div>
 
       {/* Histórico */}
       {recentCheckins.length > 0 && (
-        <motion.div initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }} transition={{ delay:.35, duration:.4 }}>
+        <div className="animate-fade-up" style={{ animationDelay:"0.35s" }}>
           <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest mb-3">📊 Histórico recente</p>
           <div className="flex flex-col gap-2">
             {recentCheckins.map((c) => {
@@ -295,7 +294,7 @@ export default function InicioClient({
               );
             })}
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   );
