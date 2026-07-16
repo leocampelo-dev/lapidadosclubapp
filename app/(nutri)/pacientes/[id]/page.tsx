@@ -7,11 +7,12 @@ export default async function PacientePage({ params }: { params: Promise<{ id: s
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const [patientRes, appointmentsRes, financialRes, plansRes] = await Promise.all([
-    supabase.from("patients").select("*").eq("id", id).eq("user_id", user!.id).single(),
+  const [patientRes, appointmentsRes, financialRes, plansRes, dietRes] = await Promise.all([
+    supabase.from("patients").select("*").eq("id", id).eq("owner_id", user!.id).single(),
     supabase.from("appointments").select("*").eq("patient_id", id).order("date", { ascending: false }),
     supabase.from("financial").select("*").eq("patient_id", id).order("created_at", { ascending: false }),
     supabase.from("plans").select("*").eq("user_id", user!.id),
+    supabase.from("diet_plans").select("id, name, active").eq("patient_id", id).eq("active", true).maybeSingle(),
   ]);
 
   if (!patientRes.data) notFound();
@@ -21,6 +22,17 @@ export default async function PacientePage({ params }: { params: Promise<{ id: s
   const financial = financialRes.data ?? [];
   const plans = plansRes.data ?? [];
   const plan = plans.find((pl) => pl.name === patient.plan);
+  const diet = dietRes.data ?? null;
+
+  let meals: any[] = [];
+  if (diet) {
+    const { data: mealsData } = await supabase
+      .from("meals")
+      .select("id, name, time, order, meal_items(id, food_name, qty, unit, kcal, protein, carbs, fat)")
+      .eq("diet_id", diet.id)
+      .order("order");
+    meals = mealsData ?? [];
+  }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -61,6 +73,8 @@ export default async function PacientePage({ params }: { params: Promise<{ id: s
       nextDate={nextDate ? nextDate.toISOString().split("T")[0] : null}
       totalPago={totalPago}
       totalPendente={totalPendente}
+      initialDiet={diet}
+      initialMeals={meals}
     />
   );
 }

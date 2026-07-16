@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { ArrowLeft, Plus, Search, Trash2, Clock, X, Loader2 } from "lucide-react";
+import { Plus, Search, Trash2, Clock, X, Loader2 } from "lucide-react";
 
 interface Item {
   id: string;
@@ -34,21 +33,16 @@ interface FoodResult {
   fat_100g: number | null;
 }
 
-interface Patient {
-  id: string;
-  name: string;
-}
-
 function n(v: number | null | undefined) {
   return Math.round((v ?? 0) * 10) / 10;
 }
 
-export default function DietaEditorClient({
-  patient,
+export default function DietaTab({
+  patientId,
   initialDiet,
   initialMeals,
 }: {
-  patient: Patient;
+  patientId: string;
   initialDiet: { id: string; name: string; active: boolean } | null;
   initialMeals: Meal[];
 }) {
@@ -77,7 +71,7 @@ export default function DietaEditorClient({
     if (dietId) return dietId;
     const { data, error } = await supabase
       .from("diet_plans")
-      .insert({ patient_id: patient.id, name: "Plano alimentar", active: true })
+      .insert({ patient_id: patientId, name: "Plano alimentar", active: true })
       .select("id")
       .single();
     if (error || !data) throw error;
@@ -156,10 +150,7 @@ export default function DietaEditorClient({
     setMeals((prev) =>
       prev.map((m) =>
         m.id === mealId
-          ? {
-              ...m,
-              meal_items: m.meal_items.map((i) => (i.id === itemId ? { ...i, ...updated } : i)),
-            }
+          ? { ...m, meal_items: m.meal_items.map((i) => (i.id === itemId ? { ...i, ...updated } : i)) }
           : m
       )
     );
@@ -167,64 +158,47 @@ export default function DietaEditorClient({
   }
 
   return (
-    <div className="min-h-full bg-[#F8F8F8]">
-      {/* Header fixo */}
-      <div className="sticky top-0 z-10 bg-white border-b border-surface-muted px-6 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/dietas" className="text-ink-muted hover:text-ink transition-colors shrink-0">
-            <ArrowLeft size={18} />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-ink truncate">{patient.name}</h1>
-            <p className="text-xs text-ink-muted">Plano alimentar</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 shrink-0">
-          <TotalBadge label="kcal" value={n(totals.kcal)} />
-          <TotalBadge label="P" value={n(totals.protein)} suffix="g" />
-          <TotalBadge label="C" value={n(totals.carbs)} suffix="g" />
-          <TotalBadge label="G" value={n(totals.fat)} suffix="g" />
-        </div>
+    <div className="flex flex-col gap-4">
+      {/* Totais do dia */}
+      <div className="grid grid-cols-4 gap-2 bg-surface-subtle rounded-md p-3">
+        <TotalBadge label="kcal" value={n(totals.kcal)} />
+        <TotalBadge label="Proteína" value={n(totals.protein)} suffix="g" />
+        <TotalBadge label="Carbo" value={n(totals.carbs)} suffix="g" />
+        <TotalBadge label="Gordura" value={n(totals.fat)} suffix="g" />
       </div>
 
-      <div className="p-6 max-w-3xl mx-auto flex flex-col gap-4">
-        {meals.map((meal) => (
-          <MealCard
-            key={meal.id}
-            meal={meal}
-            onRename={(name) => handleRenameMeal(meal.id, name)}
-            onTime={(time) => handleMealTime(meal.id, time)}
-            onRemove={() => handleRemoveMeal(meal.id)}
-            onAddItemClick={() => setPickerMealId(meal.id)}
-            onRemoveItem={(itemId) => handleRemoveItem(meal.id, itemId)}
-            onQtyChange={(itemId, qty) => handleQtyChange(meal.id, itemId, qty)}
-          />
-        ))}
+      {meals.map((meal) => (
+        <MealCard
+          key={meal.id}
+          meal={meal}
+          onRename={(name) => handleRenameMeal(meal.id, name)}
+          onTime={(time) => handleMealTime(meal.id, time)}
+          onRemove={() => handleRemoveMeal(meal.id)}
+          onAddItemClick={() => setPickerMealId(meal.id)}
+          onRemoveItem={(itemId) => handleRemoveItem(meal.id, itemId)}
+          onQtyChange={(itemId, qty) => handleQtyChange(meal.id, itemId, qty)}
+        />
+      ))}
 
-        <button
-          onClick={handleAddMeal}
-          disabled={savingMeal}
-          className="flex items-center justify-center gap-2 h-11 border-2 border-dashed border-surface-muted
-                     rounded-md text-sm font-medium text-ink-secondary hover:border-brand hover:text-brand
-                     transition-colors disabled:opacity-50"
-        >
-          {savingMeal ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-          Nova refeição
-        </button>
+      <button
+        onClick={handleAddMeal}
+        disabled={savingMeal}
+        className="flex items-center justify-center gap-2 h-11 border-2 border-dashed border-surface-muted
+                   rounded-md text-sm font-medium text-ink-secondary hover:border-brand hover:text-brand
+                   transition-colors disabled:opacity-50"
+      >
+        {savingMeal ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+        Nova refeição
+      </button>
 
-        {meals.length === 0 && !savingMeal && (
-          <p className="text-center text-ink-muted text-sm mt-4">
-            Comece adicionando a primeira refeição do dia.
-          </p>
-        )}
-      </div>
+      {meals.length === 0 && !savingMeal && (
+        <p className="text-center text-ink-muted text-sm py-2">
+          Comece adicionando a primeira refeição do dia.
+        </p>
+      )}
 
       {pickerMealId && (
-        <FoodPickerModal
-          onClose={() => setPickerMealId(null)}
-          onAdd={(item) => handleAddItem(pickerMealId, item)}
-        />
+        <FoodPickerModal onClose={() => setPickerMealId(null)} onAdd={(item) => handleAddItem(pickerMealId, item)} />
       )}
     </div>
   );
@@ -240,13 +214,7 @@ function TotalBadge({ label, value, suffix = "" }: { label: string; value: numbe
 }
 
 function MealCard({
-  meal,
-  onRename,
-  onTime,
-  onRemove,
-  onAddItemClick,
-  onRemoveItem,
-  onQtyChange,
+  meal, onRename, onTime, onRemove, onAddItemClick, onRemoveItem, onQtyChange,
 }: {
   meal: Meal;
   onRename: (name: string) => void;
@@ -259,17 +227,14 @@ function MealCard({
   const mealTotals = meal.meal_items.reduce(
     (acc, i) => {
       acc.kcal += i.kcal ?? 0;
-      acc.protein += i.protein ?? 0;
-      acc.carbs += i.carbs ?? 0;
-      acc.fat += i.fat ?? 0;
       return acc;
     },
-    { kcal: 0, protein: 0, carbs: 0, fat: 0 }
+    { kcal: 0 }
   );
 
   return (
-    <div className="bg-white border border-surface-muted rounded-md shadow-card overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-muted">
+    <div className="border border-surface-muted rounded-md overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-surface-muted bg-surface-subtle/50">
         <input
           value={meal.name}
           onChange={(e) => onRename(e.target.value)}
@@ -303,8 +268,7 @@ function MealCard({
               type="number"
               value={item.qty}
               onChange={(e) => onQtyChange(item.id, Number(e.target.value))}
-              className="w-16 h-8 px-2 text-sm text-center border border-surface-muted rounded-sm
-                         focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
+              className="w-16 h-8 px-2 text-sm text-center border border-surface-muted rounded-sm focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
             />
             <span className="text-xs text-ink-muted w-4 shrink-0">{item.unit}</span>
             <button onClick={() => onRemoveItem(item.id)} className="text-ink-muted hover:text-red-500 transition-colors shrink-0">
@@ -324,13 +288,7 @@ function MealCard({
   );
 }
 
-function FoodPickerModal({
-  onClose,
-  onAdd,
-}: {
-  onClose: () => void;
-  onAdd: (item: Omit<Item, "id">) => void;
-}) {
+function FoodPickerModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: Omit<Item, "id">) => void }) {
   const supabase = createClient();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FoodResult[]>([]);
@@ -361,8 +319,7 @@ function FoodPickerModal({
     if (manualMode) {
       onAdd({
         food_name: manual.name || "Alimento",
-        qty,
-        unit: "g",
+        qty, unit: "g",
         kcal: manual.kcal ? Number(manual.kcal) : null,
         protein: manual.protein ? Number(manual.protein) : null,
         carbs: manual.carbs ? Number(manual.carbs) : null,
@@ -373,9 +330,7 @@ function FoodPickerModal({
     if (!selected) return;
     const ratio = qty / 100;
     onAdd({
-      food_name: selected.name,
-      qty,
-      unit: "g",
+      food_name: selected.name, qty, unit: "g",
       kcal: selected.kcal_100g !== null ? Math.round(selected.kcal_100g * ratio * 10) / 10 : null,
       protein: selected.protein_100g !== null ? Math.round(selected.protein_100g * ratio * 10) / 10 : null,
       carbs: selected.carbs_100g !== null ? Math.round(selected.carbs_100g * ratio * 10) / 10 : null,
@@ -388,9 +343,7 @@ function FoodPickerModal({
       <div className="bg-white w-full sm:max-w-md sm:rounded-md rounded-t-lg shadow-card-hover max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-surface-muted shrink-0">
           <h3 className="text-sm font-semibold text-ink">Adicionar alimento</h3>
-          <button onClick={onClose} className="text-ink-muted hover:text-ink transition-colors">
-            <X size={18} />
-          </button>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink transition-colors"><X size={18} /></button>
         </div>
 
         {!manualMode ? (
@@ -403,8 +356,7 @@ function FoodPickerModal({
                   value={query}
                   onChange={(e) => handleSearch(e.target.value)}
                   placeholder="Buscar alimento (ex: arroz, frango...)"
-                  className="w-full h-10 pl-9 pr-3 rounded-sm border border-surface-muted text-sm
-                             focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
+                  className="w-full h-10 pl-9 pr-3 rounded-sm border border-surface-muted text-sm focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
                 />
               </div>
             </div>
@@ -412,13 +364,8 @@ function FoodPickerModal({
             <div className="flex-1 overflow-y-auto px-2">
               {loading && <p className="text-center text-xs text-ink-muted py-4">Buscando...</p>}
               {!loading && results.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setSelected(f)}
-                  className={`w-full text-left px-3 py-2.5 rounded-sm mb-1 transition-colors ${
-                    selected?.id === f.id ? "bg-brand-50 border border-brand" : "hover:bg-surface-subtle border border-transparent"
-                  }`}
-                >
+                <button key={f.id} onClick={() => setSelected(f)}
+                  className={`w-full text-left px-3 py-2.5 rounded-sm mb-1 transition-colors ${selected?.id === f.id ? "bg-brand-50 border border-brand" : "hover:bg-surface-subtle border border-transparent"}`}>
                   <p className="text-sm text-ink">{f.name}</p>
                   <p className="text-xs text-ink-muted">
                     {n(f.kcal_100g)} kcal · P {n(f.protein_100g)}g · C {n(f.carbs_100g)}g · G {n(f.fat_100g)}g <span className="text-ink-disabled">/100g</span>
@@ -431,26 +378,15 @@ function FoodPickerModal({
             </div>
 
             <div className="p-4 border-t border-surface-muted shrink-0 flex flex-col gap-3">
-              <button
-                onClick={() => setManualMode(true)}
-                className="text-xs text-brand hover:text-brand-dark font-medium text-left"
-              >
+              <button onClick={() => setManualMode(true)} className="text-xs text-brand hover:text-brand-dark font-medium text-left">
                 Não achei — adicionar manualmente
               </button>
-
               {selected && (
                 <div className="flex items-center gap-3">
                   <label className="text-xs text-ink-secondary shrink-0">Quantidade (g)</label>
-                  <input
-                    type="number"
-                    value={qty}
-                    onChange={(e) => setQty(Number(e.target.value))}
-                    className="w-20 h-9 px-2 text-sm text-center border border-surface-muted rounded-sm focus:outline-none focus:ring-2 focus:ring-brand"
-                  />
-                  <button
-                    onClick={confirmAdd}
-                    className="flex-1 h-9 bg-brand hover:bg-brand-dark text-white text-sm font-medium rounded-sm transition-colors"
-                  >
+                  <input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value))}
+                    className="w-20 h-9 px-2 text-sm text-center border border-surface-muted rounded-sm focus:outline-none focus:ring-2 focus:ring-brand" />
+                  <button onClick={confirmAdd} className="flex-1 h-9 bg-brand hover:bg-brand-dark text-white text-sm font-medium rounded-sm transition-colors">
                     Adicionar
                   </button>
                 </div>
@@ -459,12 +395,8 @@ function FoodPickerModal({
           </>
         ) : (
           <div className="p-4 flex flex-col gap-3 overflow-y-auto">
-            <input
-              placeholder="Nome do alimento"
-              value={manual.name}
-              onChange={(e) => setManual({ ...manual, name: e.target.value })}
-              className="h-9 px-3 text-sm border border-surface-muted rounded-sm focus:outline-none focus:ring-2 focus:ring-brand"
-            />
+            <input placeholder="Nome do alimento" value={manual.name} onChange={(e) => setManual({ ...manual, name: e.target.value })}
+              className="h-9 px-3 text-sm border border-surface-muted rounded-sm focus:outline-none focus:ring-2 focus:ring-brand" />
             <div className="grid grid-cols-2 gap-2">
               <input type="number" placeholder="Qtd (g)" value={qty} onChange={(e) => setQty(Number(e.target.value))}
                 className="h-9 px-3 text-sm border border-surface-muted rounded-sm focus:outline-none focus:ring-2 focus:ring-brand" />

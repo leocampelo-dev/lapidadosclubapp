@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, Users, ClipboardList, Activity, Utensils,
+  LayoutDashboard, Users, ClipboardList, Activity,
   Dumbbell, DollarSign, BookOpen, Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -16,7 +16,6 @@ const navItems = [
   { href: "/pacientes",    label: "Pacientes",       icon: Users },
   { href: "/atendimentos", label: "Atendimentos",    icon: ClipboardList },
   { href: "/checkins", label: "Check-ins", icon: Activity },
-  { href: "/dietas",       label: "Dietas",          icon: Utensils },
   { href: "/treinos",      label: "Treinos",         icon: Dumbbell },
   { href: "/financeiro",   label: "Financeiro",      icon: DollarSign },
   { href: "/membros",      label: "Área de Membros", icon: BookOpen },

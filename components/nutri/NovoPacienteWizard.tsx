@@ -30,6 +30,7 @@ export default function NovoPacienteWizard({ plans, onClose, onSaved }: Props) {
   // Dados do paciente (passo 1)
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [planName, setPlanName] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
@@ -75,9 +76,10 @@ export default function NovoPacienteWizard({ plans, onClose, onSaved }: Props) {
       const patientId = `PAC-${String(Date.now()).slice(-6)}`;
       const { error: pErr } = await supabase.from("patients").insert({
         id: patientId,
-        user_id: user.id,
+        owner_id: user.id,
         name,
         phone: phone || "",
+        email: email || "",
         plan: planName,
         start_date: startDate,
         notes: notes || "",
@@ -170,7 +172,13 @@ export default function NovoPacienteWizard({ plans, onClose, onSaved }: Props) {
           {/* PASSO 1: Dados do paciente */}
           {step === 1 && <>
             <Field label="Nome completo *" value={name} onChange={setName} placeholder="Ex: Ana Carolina Souza" />
-            <Field label="WhatsApp" value={phone} onChange={setPhone} placeholder="(82) 99999-9999" />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="WhatsApp" value={phone} onChange={setPhone} placeholder="(82) 99999-9999" />
+              <Field label="Email" value={email} onChange={setEmail} placeholder="paciente@email.com" type="email" />
+            </div>
+            <p className="text-[11px] text-ink-muted -mt-1">
+              O email é usado depois pra enviar o convite de acesso ao app do paciente.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-ink-secondary mb-1">Plano *</label>

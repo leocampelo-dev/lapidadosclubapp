@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import {
   ChevronLeft, Phone, Plus, X, Edit2, Trash2, Pause, Play,
-  Calendar, DollarSign, FileText, MoreVertical, Mail, Check,
+  Calendar, DollarSign, FileText, MoreVertical, Mail, Check, Utensils,
 } from "lucide-react";
 import Link from "next/link";
+import DietaTab from "./DietaTab";
 
 interface Patient {
-  id: string; name: string; phone?: string; plan?: string;
+  id: string; name: string; phone?: string; plan?: string; email?: string;
   start_date: string; notes?: string; status?: string; user_id?: string;
 }
 interface Appointment {
@@ -23,18 +24,25 @@ interface Financial {
   pay_method: string; status: string; notes?: string; created_at: string;
 }
 interface Plan { id: string; name: string; duration_days: number; sessions: number; price?: number; }
+interface DietItem {
+  id: string; food_name: string; qty: number; unit: string;
+  kcal: number | null; protein: number | null; carbs: number | null; fat: number | null;
+}
+interface Meal { id: string; name: string; time: string | null; order: number; meal_items: DietItem[]; }
+interface Diet { id: string; name: string; active: boolean; }
 
-type Tab = "historico" | "financeiro" | "dados";
+type Tab = "historico" | "financeiro" | "dieta" | "dados";
 
 export default function PacienteDetailClient({
   patient, appointments, financial, plan, plans, status,
   daysSinceLastAppt, daysUntilPlanEnd, planEndDate, nextDate,
-  totalPago, totalPendente,
+  totalPago, totalPendente, initialDiet, initialMeals,
 }: {
   patient: Patient; appointments: Appointment[]; financial: Financial[];
   plan?: Plan; plans: Plan[]; status: "em_dia" | "atrasado" | "renovacao";
   daysSinceLastAppt: number | null; daysUntilPlanEnd: number;
   planEndDate: string; nextDate: string | null; totalPago: number; totalPendente: number;
+  initialDiet: Diet | null; initialMeals: Meal[];
 }) {
   const supabase = createClient();
   const router   = useRouter();
@@ -63,14 +71,14 @@ export default function PacienteDetailClient({
 
   // ── Funções ──────────────────────────────────────────────
   function openEdit() {
-    setForm({ name:patient.name, phone:patient.phone??"", plan:patient.plan??"", start_date:patient.start_date, notes:patient.notes??"" });
+    setForm({ name:patient.name, phone:patient.phone??"", plan:patient.plan??"", start_date:patient.start_date, notes:patient.notes??"", email:patient.email??"" });
     setEditModal(true); setMenuOpen(false);
   }
 
   async function saveEdit() {
     setLoading(true);
     const { error } = await supabase.from("patients").update({
-      name:form.name, phone:form.phone, plan:form.plan, start_date:form.start_date, notes:form.notes,
+      name:form.name, phone:form.phone, plan:form.plan, start_date:form.start_date, notes:form.notes, email:form.email,
     }).eq("id", patient.id);
     if (!error) { setEditModal(false); router.refresh(); }
     else alert("Erro ao salvar.");
@@ -199,7 +207,7 @@ export default function PacienteDetailClient({
                 <button onClick={openEdit} className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-ink hover:bg-surface-subtle transition-colors">
                   <Edit2 size={14} /> Editar dados
                 </button>
-                <button onClick={() => { setInviteModal(true); setInviteSent(false); setInviteEmail(""); setMenuOpen(false); }}
+                <button onClick={() => { setInviteModal(true); setInviteSent(false); setInviteEmail(patient.email ?? ""); setMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-ink hover:bg-surface-subtle transition-colors">
                   <Mail size={14} /> Enviar convite de acesso
                 </button>
@@ -249,6 +257,7 @@ export default function PacienteDetailClient({
           {([
             { key:"historico",  label:"Histórico",  icon:Calendar   },
             { key:"financeiro", label:"Financeiro", icon:DollarSign },
+            { key:"dieta",      label:"Dieta",      icon:Utensils   },
             { key:"dados",      label:"Dados",      icon:FileText   },
           ] as const).map(({ key, label, icon:Icon }) => (
             <button key={key} onClick={() => setTab(key)}
@@ -315,12 +324,18 @@ export default function PacienteDetailClient({
             </div>
           )}
 
+          {/* DIETA */}
+          {tab === "dieta" && (
+            <DietaTab patientId={patient.id} initialDiet={initialDiet} initialMeals={initialMeals} />
+          )}
+
           {/* DADOS */}
           {tab === "dados" && (
             <div className="flex flex-col gap-4">
               {[
                 { label:"Nome completo", value:patient.name },
                 { label:"WhatsApp",     value:patient.phone||"—" },
+                { label:"Email",        value:patient.email||"—" },
                 { label:"Plano",        value:plan?`${plan.name} (${plan.sessions} consultas, ${plan.duration_days} dias)`:patient.plan||"—" },
                 { label:"Observações",  value:patient.notes||"Nenhuma." },
               ].map((d) => (
@@ -345,6 +360,7 @@ export default function PacienteDetailClient({
         <Modal title="Editar paciente" onClose={() => setEditModal(false)}>
           <Field label="Nome completo" value={form.name??""} onChange={(v)=>setForm(f=>({...f,name:v}))} />
           <Field label="WhatsApp" value={form.phone??""} onChange={(v)=>setForm(f=>({...f,phone:v}))} />
+          <Field label="Email" value={form.email??""} onChange={(v)=>setForm(f=>({...f,email:v}))} type="email" placeholder="email@exemplo.com" />
           <div>
             <label className="block text-xs font-medium text-ink-secondary mb-1">Plano</label>
             <select value={form.plan??""} onChange={(e)=>setForm(f=>({...f,plan:e.target.value}))}
