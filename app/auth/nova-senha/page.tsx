@@ -59,7 +59,8 @@ export default function NovaSenhaPage() {
       .single();
 
     const role = roleData?.role ?? "paciente";
-    router.push(role === "nutri" ? "/dashboard" : "/inicio");
+    // Mesmo motivo do login: navegação dura pra garantir cookie gravado.
+    window.location.href = role === "nutri" ? "/dashboard" : "/inicio";
   }
 
   if (checkingSession) {

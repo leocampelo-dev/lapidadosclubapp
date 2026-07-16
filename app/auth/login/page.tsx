@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 type Mode = "login" | "esqueci-senha";
 
@@ -13,7 +12,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
-  const router = useRouter();
   const supabase = createClient();
 
   async function handleLogin(e: React.FormEvent) {
@@ -40,7 +38,10 @@ export default function LoginPage() {
       .single();
 
     const role = roleData?.role ?? "paciente";
-    router.push(role === "nutri" ? "/dashboard" : "/inicio");
+    // Navegação "dura" de propósito: router.push pode disparar a próxima
+    // requisição antes do cookie de sessão terminar de ser gravado,
+    // fazendo o middleware não reconhecer o login e voltar pra cá.
+    window.location.href = role === "nutri" ? "/dashboard" : "/inicio";
   }
 
   async function handleForgotPassword(e: React.FormEvent) {
