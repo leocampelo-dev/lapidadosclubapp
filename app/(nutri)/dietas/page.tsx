@@ -1,14 +1,23 @@
-export default function DietasPage() {
-  return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-xl font-semibold text-ink mb-2">Dietas</h1>
-      <p className="text-ink-secondary text-sm mb-6">Editor de planos alimentares em breve.</p>
-      <div className="bg-white border border-surface-muted rounded-md p-8 text-center shadow-card">
-        <p className="text-ink-muted text-sm">
-          O editor de dietas será implementado na próxima fase. <br />
-          Você poderá criar refeições, adicionar alimentos e calcular macros.
-        </p>
-      </div>
-    </div>
-  );
+import { createClient } from "@/lib/supabase/server";
+import DietasClient from "./DietasClient";
+
+export default async function DietasPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const [patientsRes, dietsRes] = await Promise.all([
+    supabase.from("patients").select("id, name, phone, status").eq("owner_id", user!.id).order("name"),
+    supabase.from("diet_plans").select("id, patient_id, name, active, created_at").eq("active", true),
+  ]);
+
+  const patients = patientsRes.data ?? [];
+  const diets = dietsRes.data ?? [];
+
+  const patientsWithDiet = patients.map((p) => ({
+    ...p,
+    diet: diets.find((d) => d.patient_id === p.id) ?? null,
+    isInactive: p.status === "inativo",
+  }));
+
+  return <DietasClient patients={patientsWithDiet} />;
 }
