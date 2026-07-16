@@ -61,24 +61,22 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(dest);
   }
 
-  // Bloqueia paciente tentando acessar rotas do nutri e vice-versa
-  const nutriRoutes = ["/dashboard", "/pacientes", "/checkins", "/atendimentos", "/dietas", "/treinos", "/financeiro", "/membros"];
-  const pacienteRoutes = ["/inicio", "/dieta", "/treino", "/checkin/", "/evolucao", "/conquistas"];
+  // Bloqueia paciente tentando acessar rotas do nutri e vice-versa.
+  // Usa match por segmento inteiro (não startsWith cru) pra "/dietas" não
+  // ser confundido com "/dieta", nem "/treinos" com "/treino".
+  const matchesRoute = (path: string, route: string) =>
+    path === route || path.startsWith(route + "/");
 
-  if (role === "paciente" && nutriRoutes.some((r) => pathname.startsWith(r))) {
+  const nutriRoutes = ["/dashboard", "/pacientes", "/checkins", "/atendimentos", "/dietas", "/treinos", "/financeiro", "/membros"];
+  const pacienteRoutes = ["/inicio", "/dieta", "/treino", "/checkin", "/evolucao", "/conquistas"];
+
+  if (role === "paciente" && nutriRoutes.some((r) => matchesRoute(pathname, r))) {
     const dest = request.nextUrl.clone();
     dest.pathname = "/inicio";
     return NextResponse.redirect(dest);
   }
 
-  // Cuidado especial: /checkin (paciente) vs /checkins (nutri)
-  if (role === "nutri" && (pathname === "/checkin" || pathname.startsWith("/checkin/"))) {
-    const dest = request.nextUrl.clone();
-    dest.pathname = "/dashboard";
-    return NextResponse.redirect(dest);
-  }
-
-  if (role === "nutri" && pacienteRoutes.filter(r => r !== "/checkin/").some((r) => pathname.startsWith(r))) {
+  if (role === "nutri" && pacienteRoutes.some((r) => matchesRoute(pathname, r))) {
     const dest = request.nextUrl.clone();
     dest.pathname = "/dashboard";
     return NextResponse.redirect(dest);
