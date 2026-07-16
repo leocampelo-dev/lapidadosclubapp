@@ -40,23 +40,25 @@ export default function NovaSenhaPage() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
+    const { data, error } = await supabase.auth.updateUser({ password });
 
-    if (error) {
+    if (error || !data.user) {
       setError("Não foi possível salvar a senha. Tente novamente.");
+      setLoading(false);
       return;
     }
 
-    // Busca role e redireciona pra área correta
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: roleData } = await supabase
+    const { data: roleData, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
+      .eq("user_id", data.user.id)
       .single();
+
+    if (roleError) {
+      setError("Senha salva, mas não consegui carregar seu perfil. Tente entrar de novo pela tela de login.");
+      setLoading(false);
+      return;
+    }
 
     const role = roleData?.role ?? "paciente";
     // Mesmo motivo do login: navegação dura pra garantir cookie gravado.

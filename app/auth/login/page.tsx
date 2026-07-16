@@ -19,23 +19,25 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
+    if (error || !data.user) {
       setError("E-mail ou senha incorretos.");
       setLoading(false);
       return;
     }
 
-    // Busca role e redireciona
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: roleData } = await supabase
+    const { data: roleData, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
+      .eq("user_id", data.user.id)
       .single();
+
+    if (roleError) {
+      setError("Login funcionou, mas não consegui carregar seu perfil. Tente novamente ou avise o suporte.");
+      setLoading(false);
+      return;
+    }
 
     const role = roleData?.role ?? "paciente";
     // Navegação "dura" de propósito: router.push pode disparar a próxima
