@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, ClipboardList, Activity,
-  Dumbbell, DollarSign, BookOpen, Settings,
+  Dumbbell, DollarSign, BookOpen, Settings, LogOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -27,11 +27,13 @@ export default function NutriSidebar({ userName: initialName }: { userName: stri
   const supabase = createClient();
   const [userName, setUserName] = useState(initialName);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setUserEmail(user.email ?? "");
       const { data } = await supabase.from("profile").select("full_name, avatar_data").eq("user_id", user.id).maybeSingle();
       if (data?.full_name) setUserName(data.full_name);
       if (data?.avatar_data) setAvatarUrl(data.avatar_data);
@@ -77,15 +79,27 @@ export default function NutriSidebar({ userName: initialName }: { userName: stri
           <Settings size={15} />
           Configurações
         </Link>
-        <div className="flex items-center gap-2.5 px-2 mt-2">
+        <div className="flex items-center gap-2.5 px-2 mt-2 min-w-0">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={userName} className="w-7 h-7 rounded-full object-cover" />
+            <img src={avatarUrl} alt={userName} className="w-7 h-7 rounded-full object-cover shrink-0" />
           ) : (
             <div className="w-7 h-7 rounded-full bg-brand/20 flex items-center justify-center shrink-0">
               <span className="text-brand text-xs font-semibold">{userName.charAt(0).toUpperCase()}</span>
             </div>
           )}
-          <span className="text-nutri-text text-xs font-medium truncate">{userName}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-nutri-text text-xs font-medium truncate">{userName}</p>
+            {userEmail && (
+              <p className="text-nutri-muted text-[10px] truncate" title={userEmail}>{userEmail}</p>
+            )}
+          </div>
+          <button
+            onClick={handleLogout}
+            title="Sair"
+            className="text-nutri-muted hover:text-nutri-text p-1 rounded-sm hover:bg-white/5 transition-colors shrink-0"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
     </aside>
